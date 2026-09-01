@@ -1,0 +1,13 @@
+{
+  "name": "jadwal-kuliah",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplikasi penjadwalan kuliah multi program studi dengan deteksi bentrok (ruang, hari, jam, dosen) dan auto-generate. Tanpa dependensi npm.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

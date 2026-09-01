@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIMALIA — Sistem Informasi Manajemen Jadwal Kuliah</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="login-overlay" id="loginOverlay" hidden>
+    <div class="login-card2">
+      <div class="login-left">
+        <form id="loginForm">
+          <p class="login-welcome">Selamat datang di</p>
+          <div class="login-logo"><span class="login-badge">📅</span>SIMALIA</div>
+          <p class="login-sub">Masuk untuk mengelola Sistem Informasi Manajemen Jadwal Kuliah.</p>
+          <label class="login-field"><span class="lf-ico">👤</span><input name="username" autocomplete="username" placeholder="Username" required /></label>
+          <label class="login-field"><span class="lf-ico">🔒</span><input type="password" name="password" autocomplete="current-password" placeholder="Password" required /></label>
+          <div class="login-msg" id="loginMsg"></div>
+          <button class="btn primary login-btn" type="submit">MASUK</button>
+          <p class="login-foot">Sistem Penjadwalan Terintegrasi</p>
+        </form>
+      </div>
+      <div class="login-right" aria-hidden="true">
+        <div class="login-right-inner">
+          <span class="login-badge3">📅</span>
+          <div class="login-brand2">SIMALIA</div>
+          <p>Sistem Informasi Manajemen Jadwal Kuliah — penjadwalan terintegrasi lintas fakultas &amp; program studi, otomatis bebas bentrok dosen, kelas, ruang, dan waktu.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="appRoot">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">📅</span>
+      <div>
+        <h1>SIMALIA</h1>
+        <p>Sistem Informasi Manajemen Jadwal Kuliah</p>
+      </div>
+    </div>
+    <div class="periode" id="periodeBox"></div>
+    <div class="userbox" id="userBox"></div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="jadwal">Jadwal</button>
+    <button class="tab" data-tab="fakultas">Fakultas</button>
+    <button class="tab" data-tab="prodi">Program Studi</button>
+    <button class="tab" data-tab="dosen">Dosen</button>
+    <button class="tab" data-tab="ruangan">Ruangan</button>
+    <button class="tab" data-tab="matakuliah">Mata Kuliah</button>
+    <button class="tab" data-tab="kelas">Kelas</button>
+    <button class="tab" data-tab="semester">Semester</button>
+    <button class="tab" data-tab="slot">Hari &amp; Jam</button>
+    <button class="tab" data-tab="beban">Beban Dosen</button>
+    <button class="tab" data-tab="pengguna" data-admin="1">Pengguna</button>
+  </nav>
+
+  <main id="main">
+    <!-- ============ TAB JADWAL ============ -->
+    <section class="panel active" id="panel-jadwal">
+      <div class="toolbar">
+        <div class="filters">
+          <label>Periode
+            <select id="fltPeriode"></select>
+          </label>
+          <label>Fakultas
+            <select id="fltFakultas"><option value="">Semua</option></select>
+          </label>
+          <label>Program Studi
+            <select id="fltProdi"><option value="">Semua</option></select>
+          </label>
+          <label>Dosen
+            <select id="fltDosen"><option value="">Semua</option></select>
+          </label>
+          <label>Semester
+            <select id="fltSemester"><option value="">Semua</option></select>
+          </label>
+          <label>Kelas
+            <select id="fltKelas" disabled><option value="">Pilih prodi dahulu</option></select>
+          </label>
+          <label>Ruangan
+            <select id="fltRuang">
+              <option value="">Semua Ruangan</option>
+              <option value="Kelas">Kelas</option>
+              <option value="Lab">Lab</option>
+              <option value="Daring">Daring</option>
+            </select>
+          </label>
+          <label>Tampilan
+            <select id="viewMode">
+              <option value="grid">Kisi (Hari × Jam)</option>
+              <option value="tabel">Tabel</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button class="btn" id="btnCetakSK">🖨️ Cetak SK</button>
+          <button class="btn" id="btnExportJadwal">⬇️ Excel</button>
+          <button class="btn" id="btnAuto">⚙️ Auto-generate</button>
+          <button class="btn primary" id="btnTambahJadwal">+ Tambah Jadwal</button>
+          <button class="btn danger btn-reset" id="btnResetJadwal">🗑️ Reset</button>
+        </div>
+      </div>
+      <div id="jadwalView"></div>
+    </section>
+
+    <!-- ============ TAB MASTER (generik) ============ -->
+    <section class="panel" id="panel-fakultas"></section>
+    <section class="panel" id="panel-prodi"></section>
+    <section class="panel" id="panel-dosen"></section>
+    <section class="panel" id="panel-ruangan"></section>
+    <section class="panel" id="panel-matakuliah"></section>
+    <section class="panel" id="panel-kelas"></section>
+    <section class="panel" id="panel-semester"></section>
+    <section class="panel" id="panel-slot"></section>
+    <section class="panel" id="panel-beban"></section>
+    <section class="panel" id="panel-pengguna"></section>
+  </main>
+  </div><!-- /#appRoot -->
+
+  <!-- ============ MODAL ============ -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modalTitle">Form</h3>
+        <button class="icon-btn" id="modalClose">✕</button>
+      </div>
+      <form id="modalForm" class="modal-body"></form>
+      <div class="modal-foot">
+        <div id="modalMsg" class="modal-msg"></div>
+        <div class="modal-buttons">
+          <button type="button" class="btn" id="modalCancel">Batal</button>
+          <button type="submit" class="btn primary" id="modalSave" form="modalForm">Simpan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

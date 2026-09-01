@@ -1,0 +1,12 @@
+# Data runtime (disimpan di volume persisten Coolify, jangan dibundel ke image)
+data/
+
+# Berkas lokal Windows / editor
+Thumbs.db
+desktop.ini
+*.log
+.DS_Store
+
+# Berkas non-runtime
+Jalankan E-Jadwal.bat
+Template SK.docx

@@ -1,0 +1,9 @@
+# Data runtime & backup (berisi hash password — jangan di-commit)
+data/
+
+# OS / editor
+Thumbs.db
+desktop.ini
+*.log
+.DS_Store
+node_modules/
