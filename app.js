@@ -743,7 +743,7 @@ function renderMaster(col) {
   if (col === 'dosen' && masterDosenFak) rows = rows.filter(d => { const p = DB.prodi.find(x => x.id === d.prodiId); return p && p.fakultasId === masterDosenFak; });
   if (col === 'dosen' && masterDosenProdi) rows = rows.filter(d => d.prodiId === masterDosenProdi);
   const bulk = (col === 'matakuliah' || col === 'dosen');
-  const hasIO = ['matakuliah', 'dosen', 'ruangan', 'kelas'].includes(col);
+  const hasIO = ['matakuliah', 'dosen', 'ruangan', 'kelas', 'fakultas', 'prodi'].includes(col);
   const extraBtn = hasIO
     ? `<button class="btn" data-template="1">📄 Template</button>
        <button class="btn" data-export="1">⬇️ Export</button>
@@ -873,6 +873,8 @@ function renderMaster(col) {
   if (col === 'dosen') bindDosenExportImport(panel);
   if (col === 'ruangan') bindRuanganExportImport(panel);
   if (col === 'kelas') bindKelasExportImport(panel);
+  if (col === 'fakultas') bindFakultasExportImport(panel);
+  if (col === 'prodi') bindProdiExportImport(panel);
 }
 
 // ---------- Beban Dosen (rekap jumlah mengajar per dosen) ----------
@@ -1589,6 +1591,143 @@ async function importKelas(file) {
   renderMaster('kelas');
   toast(`Import selesai: ${ok} kelas${gagal ? ', ' + gagal + ' gagal' : ''}`, gagal ? 'warn' : 'ok');
   if (errs.length) console.warn('Import kelas:', errs);
+}
+
+// ---------- Export / Import Fakultas ----------
+const FAKULTAS_HEADER = ['kode', 'nama'];
+
+function bindFakultasExportImport(panel) {
+  panel.querySelector('[data-template]').addEventListener('click', downloadFakultasTemplate);
+  panel.querySelector('[data-export]').addEventListener('click', exportFakultas);
+  const file = $('#fakultasImportFile', panel);
+  panel.querySelector('[data-import]').addEventListener('click', () => file.click());
+  file.addEventListener('change', () => { if (file.files[0]) importFakultas(file.files[0]); file.value = ''; });
+}
+
+function exportFakultas() {
+  const aoa = [FAKULTAS_HEADER];
+  (DB.fakultas || []).forEach(f => aoa.push([f.kode || '', f.nama || '']));
+  tulisXLSX('fakultas.xlsx', aoa, 'Fakultas');
+  toast('Data fakultas diekspor');
+}
+
+function downloadFakultasTemplate() {
+  const aoa = [
+    FAKULTAS_HEADER,
+    ['FKIP', 'Keguruan dan Ilmu Pendidikan'],
+    ['FT', 'Teknik']
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Fakultas');
+  XLSX.writeFile(wb, 'template-fakultas.xlsx');
+  toast('Template diunduh');
+}
+
+async function importFakultas(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })
+    .filter(r => r.some(c => String(c).trim() !== ''));
+  if (rows.length < 2) return toast('File kosong atau tanpa data', 'err');
+  const head = rows[0].map(h => String(h).trim().toLowerCase());
+  const idx = {}; FAKULTAS_HEADER.forEach(h => { idx[h] = head.indexOf(h); });
+  if (idx.nama === -1) return toast('Header wajib: nama', 'err');
+
+  const ada = (DB.fakultas || []).slice();
+  let ok = 0, gagal = 0; const errs = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const get = (k) => (idx[k] >= 0 ? String(r[idx[k]] ?? '').trim() : '');
+    const nama = get('nama'), kode = get('kode');
+    if (!nama) { gagal++; errs.push(`Baris ${i + 1}: nama kosong`); continue; }
+    if (ada.some(f => (f.nama || '').toLowerCase() === nama.toLowerCase() || (kode && (f.kode || '').toLowerCase() === kode.toLowerCase()))) {
+      gagal++; errs.push(`Baris ${i + 1}: fakultas "${kode || nama}" sudah ada`); continue;
+    }
+    const res = await api('POST', '/api/fakultas', { kode, nama });
+    if (res.ok) { ok++; ada.push(res.data); } else { gagal++; errs.push(`Baris ${i + 1}: ${res.data.error || 'gagal'}`); }
+  }
+  await loadDB();
+  renderMaster('fakultas');
+  toast(`Import selesai: ${ok} fakultas${gagal ? ', ' + gagal + ' gagal' : ''}`, gagal ? 'warn' : 'ok');
+  if (errs.length) console.warn('Import fakultas:', errs);
+}
+
+// ---------- Export / Import Program Studi ----------
+const PRODI_HEADER = ['kode', 'nama', 'jenjang', 'fakultas_kode'];
+const JENJANG_OPTS = ['D3', 'D4', 'S1', 'S2', 'S3', 'Sp-1', 'Sp-2', 'Profesi'];
+
+function bindProdiExportImport(panel) {
+  panel.querySelector('[data-template]').addEventListener('click', downloadProdiTemplate);
+  panel.querySelector('[data-export]').addEventListener('click', exportProdi);
+  const file = $('#prodiImportFile', panel);
+  panel.querySelector('[data-import]').addEventListener('click', () => file.click());
+  file.addEventListener('change', () => { if (file.files[0]) importProdi(file.files[0]); file.value = ''; });
+}
+
+function exportProdi() {
+  const aoa = [PRODI_HEADER];
+  (DB.prodi || []).forEach(p => {
+    const fak = DB.fakultas.find(f => f.id === p.fakultasId);
+    aoa.push([p.kode || '', p.nama || '', p.jenjang || '', fak ? fak.kode : '']);
+  });
+  tulisXLSX('program-studi.xlsx', aoa, 'Program Studi');
+  toast('Data program studi diekspor');
+}
+
+function downloadProdiTemplate() {
+  const fak = DB.fakultas[0];
+  const fk = fak ? fak.kode : 'FKIP';
+  const aoa = [
+    PRODI_HEADER,
+    ['86206', 'Pendidikan Guru Sekolah Dasar', 'S1', fk],
+    ['88203', 'Pendidikan Bahasa Inggris', 'S1', fk]
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Program Studi');
+  const ref = [['Kode Fakultas', 'Nama Fakultas']].concat(DB.fakultas.map(f => [f.kode, f.nama]))
+    .concat([[''], ['Jenjang']]).concat(JENJANG_OPTS.map(x => [x]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ref), 'Referensi');
+  XLSX.writeFile(wb, 'template-program-studi.xlsx');
+  toast('Template diunduh');
+}
+
+async function importProdi(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })
+    .filter(r => r.some(c => String(c).trim() !== ''));
+  if (rows.length < 2) return toast('File kosong atau tanpa data', 'err');
+  const head = rows[0].map(h => String(h).trim().toLowerCase());
+  const idx = {}; PRODI_HEADER.forEach(h => { idx[h] = head.indexOf(h); });
+  if (idx.nama === -1) return toast('Header wajib: nama', 'err');
+
+  const ada = (DB.prodi || []).slice();
+  let ok = 0, gagal = 0; const errs = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const get = (k) => (idx[k] >= 0 ? String(r[idx[k]] ?? '').trim() : '');
+    const nama = get('nama'), kode = get('kode');
+    if (!nama) { gagal++; errs.push(`Baris ${i + 1}: nama kosong`); continue; }
+    // Akun fakultas: fakultasnya sendiri; admin: dari fakultas_kode.
+    let fakultasId;
+    if (isFakultas()) fakultasId = currentUser.fakultasId;
+    else {
+      const fak = DB.fakultas.find(f => (f.kode || '').toLowerCase() === get('fakultas_kode').toLowerCase());
+      if (!fak) { gagal++; errs.push(`Baris ${i + 1}: fakultas "${get('fakultas_kode')}" tidak ditemukan`); continue; }
+      fakultasId = fak.id;
+    }
+    let jenjang = get('jenjang');
+    if (jenjang) { const f = JENJANG_OPTS.find(x => x.toLowerCase() === jenjang.toLowerCase()); jenjang = f || jenjang; }
+    if (ada.some(p => (kode && (p.kode || '').toLowerCase() === kode.toLowerCase()) || (p.fakultasId === fakultasId && (p.nama || '').toLowerCase() === nama.toLowerCase()))) {
+      gagal++; errs.push(`Baris ${i + 1}: prodi "${kode || nama}" sudah ada`); continue;
+    }
+    const res = await api('POST', '/api/prodi', { kode, nama, jenjang, fakultasId });
+    if (res.ok) { ok++; ada.push(res.data); } else { gagal++; errs.push(`Baris ${i + 1}: ${res.data.error || 'gagal'}`); }
+  }
+  await loadDB();
+  renderMaster('prodi');
+  toast(`Import selesai: ${ok} program studi${gagal ? ', ' + gagal + ' gagal' : ''}`, gagal ? 'warn' : 'ok');
+  if (errs.length) console.warn('Import program studi:', errs);
 }
 
 function exportOffer() {
