@@ -85,20 +85,14 @@ function mkAktifSemua() {
     (m.tahunAkademik || '') === (p.tahunAkademik || '') &&
     (m.semesterAktif || '') === (p.semesterAktif || ''));
 }
-// Dosen pada periode aktif. Dosen terikat periode.
+// Dosen berlaku lintas periode (tidak terikat Tahun Akademik/Semester).
 function dosenAktif() {
-  const p = DB.pengaturan || {};
-  return DB.dosen.filter(d =>
-    (d.tahunAkademik || '') === (p.tahunAkademik || '') &&
-    (d.semesterAktif || '') === (p.semesterAktif || ''));
+  return DB.dosen || [];
 }
-// Semua dosen (lintas prodi) pada periode aktif — untuk memilih pengampu.
+// Semua dosen (lintas prodi) untuk memilih pengampu — juga lintas periode.
 function dosenPilihan() {
-  const p = DB.pengaturan || {};
   const src = (DB.dosenSemua && DB.dosenSemua.length) ? DB.dosenSemua : DB.dosen;
-  return (src || []).filter(d =>
-    (d.tahunAkademik || '') === (p.tahunAkademik || '') &&
-    (d.semesterAktif || '') === (p.semesterAktif || ''));
+  return src || [];
 }
 // Kelas pada periode aktif. Kelas terikat periode.
 function kelasAktif() {
@@ -742,7 +736,7 @@ function renderMaster(col) {
   if (col === 'ruangan' && masterRuangFak) rows = rows.filter(r => r.fakultasId === masterRuangFak);
   if (col === 'dosen' && masterDosenFak) rows = rows.filter(d => { const p = DB.prodi.find(x => x.id === d.prodiId); return p && p.fakultasId === masterDosenFak; });
   if (col === 'dosen' && masterDosenProdi) rows = rows.filter(d => d.prodiId === masterDosenProdi);
-  const bulk = (col === 'matakuliah' || col === 'dosen');
+  const bulk = (col === 'matakuliah' || col === 'dosen' || col === 'kelas');
   const hasIO = ['matakuliah', 'dosen', 'ruangan', 'kelas', 'fakultas', 'prodi'].includes(col);
   const extraBtn = hasIO
     ? `<button class="btn" data-template="1">📄 Template</button>
@@ -778,7 +772,7 @@ function renderMaster(col) {
   }
   if (col === 'dosen') {
     const p = DB.pengaturan || {};
-    html += `<div class="periode-banner">👨‍🏫 Menampilkan dosen periode <b>${esc(periodeText(p.tahunAkademik, p.semesterAktif))}</b>. Tiap Tahun Akademik &amp; Semester punya daftar dosen sendiri — ganti lewat <b>Atur Periode</b>.</div>`;
+    html += `<div class="periode-banner">👨‍🏫 Daftar dosen <b>berlaku di semua Tahun Akademik &amp; Semester</b> — cukup dikelola sekali dan otomatis tersedia pada setiap periode.</div>`;
     // Filter: admin = Fakultas + Prodi; fakultas = Prodi saja; prodi = tanpa filter.
     if (!isProdi()) {
       let fh = '<div class="filters" style="margin-bottom:14px">';

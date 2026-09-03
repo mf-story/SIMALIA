@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>SIMALIA — Presentasi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0045a6; --navy2:#003a8c; --navy3:#012a5e; --ink:#0d1b34;
+    --gold:#e7b24a; --gold2:#f2cd82; --paper:#eef3fb;
+    --slate:#586179; --line:#dbe6f4;
+    --font-brand:"Cinzel", Georgia, serif;
+    --font-display:"Playfair Display", Georgia, serif;
+    --font-sans:"Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:#33404f; }
+  @page{ size:1280px 720px; margin:0; }
+  .slide{
+    position:relative; width:1280px; height:720px; overflow:hidden;
+    font-family:var(--font-sans); color:var(--ink);
+    page-break-after:always; break-after:page;
+  }
+  .slide:last-child{ page-break-after:auto; break-after:auto; }
+
+  /* ---- shared decor ---- */
+  .rule{ width:64px; height:4px; background:var(--gold); border-radius:4px; }
+  .kicker{ font-family:var(--font-sans); font-weight:800; letter-spacing:4px;
+    text-transform:uppercase; font-size:13px; }
+  .pageno{ position:absolute; bottom:30px; right:44px; font-size:12px;
+    font-weight:700; letter-spacing:2px; opacity:.6; }
+  .footmark{ position:absolute; bottom:30px; left:44px; font-size:12px;
+    font-weight:700; letter-spacing:3px; font-family:var(--font-brand); opacity:.7; }
+
+  /* ================= SLIDE 1 — HERO ================= */
+  .s1{ background:
+      radial-gradient(1200px 700px at 82% -10%, rgba(231,178,74,.16), transparent 60%),
+      linear-gradient(140deg,#0045a6 0%, #003a8c 46%, #012a5e 100%);
+    color:#eaf1fb; display:grid; grid-template-columns:1.02fr 1.1fr; }
+  .s1 .left{ padding:92px 56px 64px 76px; display:flex; flex-direction:column;
+    justify-content:center; }
+  .s1 .badge{ display:inline-flex; align-items:center; gap:12px; margin-bottom:26px; }
+  .s1 .badge .ic{ width:52px; height:52px; border-radius:14px;
+    background:linear-gradient(160deg,#1f6fe0,#0045a6);
+    display:flex; align-items:center; justify-content:center; font-size:27px;
+    box-shadow:0 12px 30px -10px rgba(0,0,0,.55); }
+  .s1 .badge span{ font-family:var(--font-sans); font-weight:800; letter-spacing:3px;
+    font-size:13px; color:var(--gold2); text-transform:uppercase; }
+  .s1 h1{ font-family:var(--font-brand); font-weight:700; font-size:88px;
+    letter-spacing:8px; line-height:1; color:#fff; text-shadow:0 6px 30px rgba(0,0,0,.3); }
+  .s1 .sub{ font-family:var(--font-display); font-size:27px; font-weight:600;
+    color:#dbe7fb; margin-top:20px; line-height:1.3; }
+  .s1 .rule{ margin:28px 0; }
+  .s1 .tag{ font-size:16px; line-height:1.7; color:#b8ccec; max-width:460px; }
+  .s1 .right{ position:relative; display:flex; align-items:center;
+    justify-content:center; padding:40px 64px 40px 20px; }
+  .s1 .shot{ width:100%; border-radius:16px; box-shadow:0 40px 80px -30px rgba(0,0,0,.75),
+    0 0 0 1px rgba(255,255,255,.08); }
+  .s1 .arc{ position:absolute; width:520px; height:520px; border-radius:50%;
+    border:1px solid rgba(231,178,74,.25); right:-160px; top:-120px; }
+
+  /* Kartu login (HTML, tajam & tanpa ruang kosong) */
+  .loginmock{ width:100%; max-width:540px; display:grid; grid-template-columns:1fr 1.05fr;
+    background:#fff; border-radius:18px; overflow:hidden;
+    box-shadow:0 40px 80px -30px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.08); }
+  .loginmock .lm-left{ padding:26px 24px; background:#fff; display:flex; flex-direction:column; }
+  .lm-welcome{ text-align:center; color:#586179; font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; margin:0; }
+  .lm-logo{ display:flex; align-items:center; justify-content:center; gap:8px; font-family:var(--font-brand);
+    font-size:23px; font-weight:800; letter-spacing:2px; color:#0045a6; margin:9px 0; }
+  .lm-badge{ width:30px; height:30px; display:grid; place-items:center; font-size:15px; border-radius:9px;
+    background:linear-gradient(150deg,#0045a6,#1560c4); box-shadow:0 8px 18px -6px rgba(0,69,166,.7); }
+  .lm-sub{ text-align:center; color:#586179; font-size:10px; line-height:1.5; margin:0 0 14px; }
+  .lm-field{ display:flex; align-items:center; gap:9px; padding:10px 15px; border:1px solid #dbe6f4;
+    border-radius:24px; background:#fbfcfe; margin-bottom:11px; color:#8a93a6; font-size:12.5px; }
+  .lm-btn{ width:100%; padding:12px; font-size:11px; font-weight:800; letter-spacing:1.5px; color:#fff; border:none;
+    border-radius:24px; background:linear-gradient(100deg,#1560c4,#0045a6 60%,#003a8c); text-align:center;
+    box-shadow:0 12px 24px -10px rgba(0,69,166,.8); margin-top:2px; }
+  .lm-foot{ text-align:center; color:#98a2b6; font-size:8px; letter-spacing:1.2px; margin:12px 0 0; text-transform:uppercase; }
+  .lm-right{ position:relative; color:#fff; display:flex; align-items:center; justify-content:center; padding:24px; background:#003a8c; text-align:center; }
+  .lm-right::before{ content:""; position:absolute; inset:0;
+    background:linear-gradient(150deg, rgba(0,69,166,.82), rgba(0,40,100,.9)), url("../DJI_0100.jpg") center/cover no-repeat; }
+  .lm-rin{ position:relative; }
+  .lm-badge3{ display:inline-grid; place-items:center; width:42px; height:42px; font-size:21px; border-radius:12px; background:rgba(255,255,255,.14); margin-bottom:8px; }
+  .lm-brand{ font-family:var(--font-brand); font-size:23px; font-weight:700; letter-spacing:3px; }
+  .lm-right p{ font-size:9.5px; line-height:1.65; color:rgba(233,240,255,.9); margin:8px 0 0; }
+
+  /* ================= SLIDE 2 — FITUR ================= */
+  .s2{ background:linear-gradient(160deg,#f4f8ff 0%, #e7f0fc 100%); }
+  .s2 .head{ padding:40px 76px 6px; }
+  .s2 .kicker{ color:var(--navy); }
+  .s2 h2{ font-family:var(--font-display); font-size:38px; font-weight:800;
+    color:var(--navy3); margin-top:10px; }
+  .s2 .rule{ margin-top:12px; }
+  .grid{ padding:20px 76px 30px; display:grid; grid-template-columns:repeat(3,1fr);
+    gap:14px; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px 15px; box-shadow:0 18px 40px -28px rgba(3,42,94,.5);
+    border-top:3px solid var(--navy); }
+  .card .ic{ width:40px; height:40px; border-radius:11px; display:flex;
+    align-items:center; justify-content:center; font-size:20px;
+    background:#eaf1fc; margin-bottom:10px; }
+  .card h3{ font-size:16px; color:var(--navy3); font-weight:800; margin-bottom:5px; }
+  .card p{ font-size:12.8px; line-height:1.45; color:var(--slate); }
+
+  /* ================= SLIDE 3 — PRODI ================= */
+  .s3{ background:linear-gradient(160deg,#f4f8ff 0%, #e7f0fc 100%);
+    display:grid; grid-template-columns:360px 1fr; }
+  .s3 .side{ background:
+      radial-gradient(600px 400px at 20% 0%, rgba(231,178,74,.14), transparent 60%),
+      linear-gradient(160deg,#0045a6,#012a5e); color:#eaf1fb;
+    padding:70px 40px; display:flex; flex-direction:column; justify-content:center; }
+  .s3 .side .ic{ width:64px; height:64px; border-radius:18px; font-size:34px;
+    background:rgba(255,255,255,.1); display:flex; align-items:center;
+    justify-content:center; margin-bottom:26px; }
+  .s3 .side .kicker{ color:var(--gold2); }
+  .s3 .side h2{ font-family:var(--font-display); font-size:40px; font-weight:800;
+    line-height:1.1; margin:12px 0 18px; color:#fff; }
+  .chip{ display:inline-block; align-self:flex-start; background:rgba(231,178,74,.16);
+    border:1px solid rgba(231,178,74,.5); color:var(--gold2); font-weight:700;
+    font-size:13px; padding:7px 14px; border-radius:999px; }
+  .s3 .side p{ font-size:14.5px; line-height:1.6; color:#c3d6f2; margin-top:18px; }
+  .s3 .body{ padding:66px 70px; display:flex; flex-direction:column; justify-content:center; }
+  .list{ display:flex; flex-direction:column; gap:16px; }
+  .item{ display:flex; gap:16px; align-items:flex-start; }
+  .item .dot{ flex:none; width:34px; height:34px; border-radius:10px; font-size:17px;
+    display:flex; align-items:center; justify-content:center; }
+  .item h4{ font-size:17px; color:var(--navy3); font-weight:800; margin-bottom:2px; }
+  .item p{ font-size:13.5px; color:var(--slate); line-height:1.5; }
+  .s3 .dot{ background:#e6f0d8; }
+  .s3 .item h4{ }
+
+  /* ================= SLIDE 4 — LANGKAH WAJIB PRODI ================= */
+  .steps-slide{ background:linear-gradient(160deg,#f4f8ff 0%, #e7f0fc 100%);
+    display:flex; flex-direction:column; }
+  .steps-slide .head2{ padding:60px 76px 0; }
+  .steps-slide .kicker{ color:var(--navy); }
+  .steps-slide h2{ font-family:var(--font-display); font-size:42px; font-weight:800;
+    color:var(--navy3); margin-top:12px; }
+  .steps-slide .rule{ margin:14px 0; }
+  .steps-slide .lead{ font-size:16px; color:var(--slate); max-width:780px; line-height:1.6; }
+  .steps{ flex:1; display:flex; align-items:center; justify-content:center;
+    gap:28px; padding:34px 76px 56px; }
+  .step{ flex:1; background:#fff; border:1px solid var(--line); border-radius:20px;
+    padding:34px 30px 30px; box-shadow:0 26px 60px -34px rgba(3,42,94,.55);
+    border-top:4px solid var(--gold); position:relative; align-self:stretch;
+    display:flex; flex-direction:column; }
+  .step .num{ position:absolute; top:-26px; left:30px; width:56px; height:56px;
+    border-radius:16px; background:linear-gradient(160deg,#0045a6,#012a5e); color:#fff;
+    font-family:var(--font-display); font-weight:800; font-size:28px; display:flex;
+    align-items:center; justify-content:center; box-shadow:0 14px 30px -12px rgba(0,69,166,.7); }
+  .step .sttag{ display:inline-block; align-self:flex-start; margin-top:16px;
+    background:#fdeccb; color:#92580b; font-weight:800; font-size:12px; letter-spacing:.5px;
+    padding:5px 12px; border-radius:999px; text-transform:uppercase; }
+  .step h3{ font-family:var(--font-display); font-size:25px; color:var(--navy3);
+    font-weight:800; margin:16px 0 10px; line-height:1.15; }
+  .step p{ font-size:15px; line-height:1.6; color:var(--slate); }
+  .step .ic-big{ margin-top:auto; font-size:40px; opacity:.9; }
+  .arrow{ font-size:50px; color:var(--gold); font-weight:700; flex:none; }
+  /* Varian 3 langkah (lebih ramping) */
+  .steps.three{ gap:18px; padding:30px 60px 52px; }
+  .steps.three .step{ padding:30px 22px 24px; }
+  .steps.three .step h3{ font-size:21px; }
+  .steps.three .step p{ font-size:13.5px; }
+  .steps.three .step .ic-big{ font-size:34px; }
+  .steps.three .arrow{ font-size:40px; }
+
+  /* ================= SLIDE 5 — FAKULTAS ================= */
+  .s4{ background:
+      radial-gradient(1000px 600px at 88% 110%, rgba(231,178,74,.14), transparent 60%),
+      linear-gradient(140deg,#0045a6 0%, #003a8c 48%, #012a5e 100%);
+    color:#eaf1fb; display:grid; grid-template-columns:1fr 360px; }
+  .s4 .body{ padding:66px 60px 66px 76px; display:flex; flex-direction:column;
+    justify-content:center; }
+  .s4 .kicker{ color:var(--gold2); }
+  .s4 h2{ font-family:var(--font-display); font-size:44px; font-weight:800;
+    color:#fff; margin:12px 0 6px; }
+  .s4 .rule{ margin:14px 0 30px; }
+  .s4 .item h4{ color:#fff; }
+  .s4 .item p{ color:#b8ccec; }
+  .s4 .item .dot{ background:rgba(255,255,255,.12); }
+  .s4 .side{ background:rgba(255,255,255,.04);
+    border-left:1px solid rgba(255,255,255,.1);
+    padding:70px 40px; display:flex; flex-direction:column; justify-content:center;
+    align-items:center; text-align:center; }
+  .s4 .side .ic{ width:96px; height:96px; border-radius:26px; font-size:52px;
+    background:linear-gradient(160deg,#1f6fe0,#0045a6); display:flex;
+    align-items:center; justify-content:center; margin-bottom:24px;
+    box-shadow:0 24px 50px -18px rgba(0,0,0,.6); }
+  .s4 .side .rolebadge{ background:#1f7a3d; color:#eafff0; font-weight:800;
+    font-size:13px; letter-spacing:1px; padding:8px 18px; border-radius:999px;
+    text-transform:uppercase; }
+  .s4 .side p{ font-size:14px; line-height:1.6; color:#c3d6f2; margin-top:20px; }
+</style>
+</head>
+<body>
+
+<!-- ============ SLIDE 1 ============ -->
+<section class="slide s1">
+  <div class="arc"></div>
+  <div class="left">
+    <div class="badge"><span class="ic">📅</span><span>Sistem Penjadwalan Terintegrasi</span></div>
+    <h1>SIMALIA</h1>
+    <div class="sub">Sistem Informasi Manajemen<br>Jadwal Kuliah</div>
+    <div class="rule"></div>
+    <p class="tag">Penjadwalan kuliah terintegrasi lintas fakultas &amp; program studi —
+      otomatis bebas bentrok dosen, kelas, ruang, dan waktu.</p>
+  </div>
+  <div class="right">
+    <div class="loginmock">
+      <div class="lm-left">
+        <p class="lm-welcome">Selamat datang di</p>
+        <div class="lm-logo"><span class="lm-badge">📅</span>SIMALIA</div>
+        <p class="lm-sub">Masuk untuk mengelola Sistem Informasi Manajemen Jadwal Kuliah.</p>
+        <div class="lm-field">👤 &nbsp;Username</div>
+        <div class="lm-field">🔒 &nbsp;Password</div>
+        <div class="lm-btn">MASUK</div>
+        <p class="lm-foot">Sistem Penjadwalan Terintegrasi</p>
+      </div>
+      <div class="lm-right">
+        <div class="lm-rin">
+          <span class="lm-badge3">📅</span>
+          <div class="lm-brand">SIMALIA</div>
+          <p>Sistem Informasi Manajemen Jadwal Kuliah — penjadwalan terintegrasi lintas fakultas &amp; program studi, otomatis bebas bentrok dosen, kelas, ruang, dan waktu.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footmark" style="color:#dbe7fb">SIMALIA</div>
+  <div class="pageno" style="color:#dbe7fb">01</div>
+</section>
+<!-- ============ SLIDE 2 ============ -->
+<section class="slide s2">
+  <div class="head">
+    <div class="kicker">Kapabilitas Utama</div>
+    <h2>Fitur Unggulan</h2>
+    <div class="rule"></div>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="ic">🗓️</div><h3>Auto-generate Jadwal</h3><p>Susun jadwal otomatis bebas bentrok dosen, kelas, ruang, dan waktu.</p></div>
+    <div class="card"><div class="ic">🏛️</div><h3>Multi-Fakultas &amp; Prodi</h3><p>Satu sistem mengelola banyak fakultas dan program studi sekaligus.</p></div>
+    <div class="card"><div class="ic">⚠️</div><h3>Deteksi Bentrok</h3><p>Peringatan real-time ketika jadwal manual berbenturan.</p></div>
+    <div class="card"><div class="ic">🗂️</div><h3>Master Data Lengkap</h3><p>Dosen, mata kuliah, kelas, ruangan, semester, hari &amp; jam.</p></div>
+    <div class="card"><div class="ic">📊</div><h3>Beban Dosen</h3><p>Rekap SKS/MK, dosen tamu, serta Non Home Base (LB).</p></div>
+    <div class="card"><div class="ic">📥</div><h3>Import/Export Excel</h3><p>Lengkap dengan template untuk seluruh data master.</p></div>
+    <div class="card"><div class="ic">🖨️</div><h3>Cetak SK Mengajar</h3><p>Per fakultas, dengan kop dan logo masing-masing.</p></div>
+    <div class="card"><div class="ic">🔐</div><h3>Hak Akses Berjenjang</h3><p>Peran Admin, Fakultas, dan Program Studi.</p></div>
+    <div class="card"><div class="ic">📆</div><h3>Manajemen Periode</h3><p>Kelola Tahun Akademik &amp; Semester aktif.</p></div>
+  </div>
+  <div class="footmark" style="color:var(--navy)">SIMALIA</div>
+  <div class="pageno" style="color:var(--navy)">02</div>
+</section>
+
+<!-- ============ SLIDE 3 — FAKULTAS ============ -->
+<section class="slide s4">
+  <div class="body">
+    <div class="kicker">Peran Pengguna</div>
+    <h2>Akun Fakultas</h2>
+    <div class="rule"></div>
+    <div class="list">
+      <div class="item"><div class="dot">🏫</div><div><h4>Kelola Se-Fakultas</h4><p>Program Studi, Dosen, Mata Kuliah, dan Kelas di seluruh prodi fakultasnya.</p></div></div>
+      <div class="item"><div class="dot">🚪</div><div><h4>Kelola Ruangan</h4><p>Ruangan milik fakultas beserta kategori/jenis ruang.</p></div></div>
+      <div class="item"><div class="dot">⚙️</div><div><h4>Atur &amp; Auto-generate Jadwal</h4><p>Berperan sebagai manajer penjadwalan untuk fakultasnya.</p></div></div>
+      <div class="item"><div class="dot">�</div><div><h4>Beban Dosen Fakultas</h4><p>Rekap SKS/MK dosen dalam lingkup seluruh fakultas.</p></div></div>
+      <div class="item"><div class="dot">🖨️</div><div><h4>Template &amp; Cetak SK</h4><p>SK Mengajar khusus fakultas dengan kop dan logo sendiri.</p></div></div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="ic">🏛️</div>
+    <span class="rolebadge">Fakultas</span>
+    <p>Lingkup: seluruh<br>program studi dalam<br>fakultasnya.</p>
+  </div>
+  <div class="footmark" style="color:#dbe7fb">SIMALIA</div>
+  <div class="pageno" style="color:#dbe7fb">03</div>
+</section>
+
+<!-- ============ SLIDE 4 — LANGKAH WAJIB FAKULTAS ============ -->
+<section class="slide steps-slide">
+  <div class="head2">
+    <div class="kicker">Alur Kerja Akun Fakultas</div>
+    <h2>Langkah Pertama &amp; Wajib</h2>
+    <div class="rule"></div>
+    <p class="lead">Setelah data prodi lengkap, akun Fakultas menyiapkan sumber daya lalu menyusun jadwal.</p>
+  </div>
+  <div class="steps three">
+    <div class="step">
+      <div class="num">1</div>
+      <span class="sttag">Wajib pertama</span>
+      <h3>Atur Ruangan &amp; Jenisnya</h3>
+      <p>Tetapkan daftar ruangan beserta kategori/jenis ruang (Kelas, Lab, dan lainnya).</p>
+      <div class="ic-big">🚪</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="num">2</div>
+      <span class="sttag">Berikutnya</span>
+      <h3>Verifikasi Beban Dosen</h3>
+      <p>Ketika seluruh Program Studi selesai mengatur sebaran mata kuliah, periksa &amp; verifikasi beban dosen.</p>
+      <div class="ic-big">📊</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="num">3</div>
+      <span class="sttag">Terakhir</span>
+      <h3>Buat / Generate Jadwal</h3>
+      <p>Susun jadwal secara manual atau jalankan <b>Auto-generate</b> otomatis bebas bentrok.</p>
+      <div class="ic-big">⚙️</div>
+    </div>
+  </div>
+  <div class="footmark" style="color:var(--navy)">SIMALIA</div>
+  <div class="pageno" style="color:var(--navy)">04</div>
+</section>
+
+<!-- ============ SLIDE 5 — PRODI ============ -->
+<section class="slide s3">
+  <div class="side">
+    <div class="ic">🎓</div>
+    <div class="kicker">Peran Pengguna</div>
+    <h2>Akun<br>Program Studi</h2>
+    <span class="chip">Lingkup: prodinya sendiri</span>
+    <p>Fokus mengelola data dan memantau jadwal khusus program studinya.</p>
+  </div>
+  <div class="body">
+    <div class="list">
+      <div class="item"><div class="dot">✅</div><div><h4>Kelola Data Prodi</h4><p>Menambah/mengubah Dosen, Mata Kuliah, dan Kelas milik program studinya.</p></div></div>
+      <div class="item"><div class="dot">👁️</div><div><h4>Lihat Jadwal (Read-only)</h4><p>Melihat jadwal prodinya tanpa auto-generate maupun mengedit.</p></div></div>
+      <div class="item"><div class="dot">🔒</div><div><h4>Filter Terkunci</h4><p>Fakultas &amp; Program Studi otomatis terkunci ke miliknya sendiri.</p></div></div>
+      <div class="item"><div class="dot">📥</div><div><h4>Import / Export &amp; Template</h4><p>Kelola data prodi lewat Excel dengan cepat dan rapi.</p></div></div>
+      <div class="item"><div class="dot">📊</div><div><h4>Beban Dosen Prodi</h4><p>Memantau rekap SKS/MK dosen dalam lingkup prodinya.</p></div></div>
+      <div class="item"><div class="dot">⬇️</div><div><h4>Unduh Jadwal Excel</h4><p>Mengekspor jadwal program studi ke berkas Excel.</p></div></div>
+    </div>
+  </div>
+  <div class="pageno" style="color:var(--navy)">05</div>
+</section>
+
+<!-- ============ SLIDE 6 — LANGKAH WAJIB PRODI ============ -->
+<section class="slide steps-slide">
+  <div class="head2">
+    <div class="kicker">Alur Kerja Akun Program Studi</div>
+    <h2>Langkah Pertama &amp; Wajib</h2>
+    <div class="rule"></div>
+    <p class="lead">Sebelum menyusun jadwal, akun Program Studi wajib melengkapi data berikut secara berurutan.</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="num">1</div>
+      <span class="sttag">Wajib pertama</span>
+      <h3>Input / Import Dosen</h3>
+      <p>Masukkan atau impor data dosen <b>sesuai homebase Program Studi</b> — bisa manual maupun melalui berkas Excel (template tersedia).</p>
+      <div class="ic-big">👨‍🏫</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="num">2</div>
+      <span class="sttag">Berikutnya</span>
+      <h3>Input / Import Sebaran Mata Kuliah</h3>
+      <p>Setelah dosen lengkap, masukkan atau impor <b>sebaran mata kuliah sesuai template Excel</b> (prodi, mata kuliah, kelas, dosen, jenis ruang).</p>
+      <div class="ic-big">📚</div>
+    </div>
+  </div>
+  <div class="footmark" style="color:var(--navy)">SIMALIA</div>
+  <div class="pageno" style="color:var(--navy)">06</div>
+</section>
+
+</body>
+</html>

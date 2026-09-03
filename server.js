@@ -224,6 +224,13 @@ function defaultDB() {
     jadwal: []
   };
 }
+// Prodi khusus penampung dosen Non Home Base (Luar Biasa / LB).
+function findLBProdi() {
+  return DB.prodi.find(p =>
+    /non\s*home\s*base/i.test(p.nama || '') ||
+    /\blb\b/i.test(p.nama || '') ||
+    /luar\s*biasa/i.test(p.nama || '')) || null;
+}
 function loadDB() {
   ensureDirs();
   if (fs.existsSync(DB_FILE)) {
@@ -250,6 +257,30 @@ function loadDB() {
   // Migrasi: ruangan lama (tanpa fakultasId, bukan daring) → milik FKIP.
   const fkip = DB.fakultas.find(f => String(f.kode || '').toUpperCase() === 'FKIP' || /keguruan dan ilmu pendidikan/i.test(f.nama || ''));
   if (fkip) DB.ruangan.forEach(r => { if (!r.daring && !r.fakultasId) r.fakultasId = fkip.id; });
+  // Aturan: dosen tanpa NIP/NIDN → homebase otomatis ke prodi "Non Home Base (LB)".
+  const lb = findLBProdi();
+  if (lb) DB.dosen.forEach(d => { if (!String(d.kode || '').trim() && d.prodiId !== lb.id) d.prodiId = lb.id; });
+  // Migrasi satu kali: dosen berlaku lintas periode → gabungkan duplikat antar-periode & remap referensi.
+  if (!DB.pengaturan._dosenGlobal) {
+    const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const keyOf = d => { const k = String(d.kode || '').trim(); return k ? 'k:' + k.toLowerCase() : 'n:' + (d.prodiId || '') + '|' + norm(d.nama); };
+    const canon = new Map(), remap = new Map();
+    for (const d of DB.dosen) {
+      const key = keyOf(d);
+      if (!canon.has(key)) canon.set(key, d);
+      else remap.set(d.id, canon.get(key).id);
+    }
+    for (const d of canon.values()) { delete d.tahunAkademik; delete d.semesterAktif; }
+    DB.dosen = Array.from(canon.values());
+    const fix = obj => {
+      if (obj.dosenId && remap.has(obj.dosenId)) obj.dosenId = remap.get(obj.dosenId);
+      if (Array.isArray(obj.dosenIds)) obj.dosenIds = obj.dosenIds.map(id => remap.get(id) || id).filter((v, i, a) => a.indexOf(v) === i);
+    };
+    DB.matakuliah.forEach(fix);
+    DB.jadwal.forEach(fix);
+    DB.pengaturan._dosenGlobal = true;
+    saveDB();
+  }
   // Seed daftar tahun akademik dari data yang ada bila masih kosong.
   if (DB.tahunAkademik.length === 0) {
     const names = new Set();
@@ -881,10 +912,15 @@ async function handleApi(req, res, url) {
       body.tahunAkademik = cand.tahunAkademik;
       body.semesterAktif = cand.semesterAktif;
     }
-    // Penawaran (matakuliah), dosen & kelas terikat periode aktif.
-    if ((col === 'matakuliah' || col === 'dosen' || col === 'kelas') && !body.tahunAkademik) {
+    // Penawaran (matakuliah) & kelas terikat periode aktif. Dosen berlaku lintas periode (tanpa stempel).
+    if ((col === 'matakuliah' || col === 'kelas') && !body.tahunAkademik) {
       body.tahunAkademik = DB.pengaturan.tahunAkademik;
       body.semesterAktif = DB.pengaturan.semesterAktif;
+    }
+    // Dosen tanpa NIP/NIDN → homebase otomatis ke prodi "Non Home Base (LB)".
+    if (col === 'dosen' && !String(body.kode || '').trim()) {
+      const lb = findLBProdi();
+      if (lb) body.prodiId = lb.id;
     }
     // Total SKS = teori + praktik.
     if (col === 'matakuliah') body.sks = (Number(body.sksTeori) || 0) + (Number(body.sksPraktik) || 0);

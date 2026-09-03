@@ -75,7 +75,7 @@ body::before {
 .brand > div { display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .brand .logo {
   font-size: 26px; width: 54px; height: 54px; display: grid; place-items: center; flex-shrink: 0;
-  background: var(--grad-gold); border-radius: 16px; box-shadow: 0 14px 30px -14px rgba(231, 178, 74, .8);
+  background: var(--grad-gold); border-radius: 38% / 42%; box-shadow: 0 14px 30px -14px rgba(231, 178, 74, .8);
 }
 .topbar h1 { font-family: var(--font-brand); font-size: 25px; margin: 0; font-weight: 800; letter-spacing: 3px; line-height: 1; }
 .topbar p { margin: 0; color: #cfe0f5; font-size: 11.5px; letter-spacing: .4px; font-weight: 500; }
