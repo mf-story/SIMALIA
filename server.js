@@ -231,6 +231,8 @@ function findLBProdi() {
     /\blb\b/i.test(p.nama || '') ||
     /luar\s*biasa/i.test(p.nama || '')) || null;
 }
+// Identitas dosen (untuk homebase & penjadwalan): NIDN diutamakan, lalu NUPTK.
+function dosenIdent(d) { return String((d && d.nidn) || '').trim() || String((d && d.nuptk) || '').trim(); }
 function loadDB() {
   ensureDirs();
   if (fs.existsSync(DB_FILE)) {
@@ -257,13 +259,25 @@ function loadDB() {
   // Migrasi: ruangan lama (tanpa fakultasId, bukan daring) → milik FKIP.
   const fkip = DB.fakultas.find(f => String(f.kode || '').toUpperCase() === 'FKIP' || /keguruan dan ilmu pendidikan/i.test(f.nama || ''));
   if (fkip) DB.ruangan.forEach(r => { if (!r.daring && !r.fakultasId) r.fakultasId = fkip.id; });
-  // Aturan: dosen tanpa NIP/NIDN → homebase otomatis ke prodi "Non Home Base (LB)".
+  // Migrasi: identitas lama `kode` (NIP/NIDN) dipisah → NIDN; siapkan field NUPTK.
+  let _migIdent = false;
+  DB.dosen.forEach(d => {
+    if (d.kode !== undefined) {
+      _migIdent = true;
+      if (!String(d.nidn || '').trim()) d.nidn = String(d.kode || '').trim();
+      delete d.kode;
+    }
+    if (d.nidn == null) d.nidn = '';
+    if (d.nuptk == null) d.nuptk = '';
+  });
+  // Aturan: dosen tanpa NIDN & NUPTK → homebase otomatis ke prodi "Non Home Base (LB)".
   const lb = findLBProdi();
-  if (lb) DB.dosen.forEach(d => { if (!String(d.kode || '').trim() && d.prodiId !== lb.id) d.prodiId = lb.id; });
+  if (lb) DB.dosen.forEach(d => { if (!dosenIdent(d) && d.prodiId !== lb.id) d.prodiId = lb.id; });
+  if (_migIdent) saveDB();
   // Migrasi satu kali: dosen berlaku lintas periode → gabungkan duplikat antar-periode & remap referensi.
   if (!DB.pengaturan._dosenGlobal) {
     const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const keyOf = d => { const k = String(d.kode || '').trim(); return k ? 'k:' + k.toLowerCase() : 'n:' + (d.prodiId || '') + '|' + norm(d.nama); };
+    const keyOf = d => { const k = dosenIdent(d); return k ? 'k:' + k.toLowerCase() : 'n:' + (d.prodiId || '') + '|' + norm(d.nama); };
     const canon = new Map(), remap = new Map();
     for (const d of DB.dosen) {
       const key = keyOf(d);
@@ -917,8 +931,8 @@ async function handleApi(req, res, url) {
       body.tahunAkademik = DB.pengaturan.tahunAkademik;
       body.semesterAktif = DB.pengaturan.semesterAktif;
     }
-    // Dosen tanpa NIP/NIDN → homebase otomatis ke prodi "Non Home Base (LB)".
-    if (col === 'dosen' && !String(body.kode || '').trim()) {
+    // Dosen tanpa NIDN & NUPTK → homebase otomatis ke prodi "Non Home Base (LB)".
+    if (col === 'dosen' && !dosenIdent(body)) {
       const lb = findLBProdi();
       if (lb) body.prodiId = lb.id;
     }

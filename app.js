@@ -94,6 +94,8 @@ function dosenPilihan() {
   const src = (DB.dosenSemua && DB.dosenSemua.length) ? DB.dosenSemua : DB.dosen;
   return src || [];
 }
+// Identitas dosen (untuk homebase & penjadwalan): NIDN diutamakan, lalu NUPTK.
+function dosenIdent(d) { return String((d && d.nidn) || '').trim() || String((d && d.nuptk) || '').trim(); }
 // Kelas pada periode aktif. Kelas terikat periode.
 function kelasAktif() {
   const p = DB.pengaturan || {};
@@ -147,10 +149,11 @@ const SCHEMAS = {
   dosen: {
     label: 'Dosen',
     columns: [
-      { k: 'kode', t: 'NIP/NIDN' }, { k: 'nama', t: 'Nama' }, { k: 'prodiId', t: 'Program Studi', ref: 'prodi' }
+      { k: 'nidn', t: 'NIDN' }, { k: 'nuptk', t: 'NUPTK' }, { k: 'nama', t: 'Nama' }, { k: 'prodiId', t: 'Program Studi', ref: 'prodi' }
     ],
     fields: [
-      { key: 'kode', label: 'NIP / NIDN', type: 'text' },
+      { key: 'nidn', label: 'NIDN', type: 'text' },
+      { key: 'nuptk', label: 'NUPTK', type: 'text' },
       { key: 'nama', label: 'Nama Dosen', type: 'text', required: true },
       { key: 'prodiId', label: 'Program Studi (homebase)', type: 'select', ref: 'prodi' }
     ]
@@ -761,7 +764,7 @@ function renderMaster(col) {
     mkAktif().forEach(m => dosenIdsOf(m).forEach(id => idset.add(id)));
     const opts = dosenAktif().filter(d => idset.has(d.id))
       .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
-      .map(d => `<option value="${d.id}" ${masterMkDosen === d.id ? 'selected' : ''}>${esc(d.nama)}${d.kode ? ' (' + esc(d.kode) + ')' : ''}</option>`).join('');
+      .map(d => `<option value="${d.id}" ${masterMkDosen === d.id ? 'selected' : ''}>${esc(d.nama)}${dosenIdent(d) ? ' (' + esc(dosenIdent(d)) + ')' : ''}</option>`).join('');
     html += `<div class="filters" style="margin-bottom:14px"><label>Dosen
       <select id="mkDosenFilter"><option value="">Semua Dosen</option>${opts}</select></label></div>`;
   }
@@ -893,7 +896,7 @@ function hitungBebanDosen() {
     const jamMinggu = Math.round((sks * perSks / 60) * 10) / 10;
     const p = prodiAll.find(x => x.id === d.prodiId);
     return {
-      id, nama: d.nama, kode: d.kode || '', prodiId: d.prodiId,
+      id, nama: d.nama, kode: dosenIdent(d), prodiId: d.prodiId,
       prodiNama: p ? (p.kode ? p.kode + ' ' + p.nama : p.nama) : '-', fakultasId: p ? p.fakultasId : '',
       mk: totalList.length, sks, kelas: kelasSet.size, jam: jamMinggu,
       mkScope: scopeList.length, tamu: !homebaseIds.has(id)
@@ -1156,7 +1159,7 @@ function openOfferingForm(record) {
   function labelDosen(d) {
     const p = DB.prodi.find(x => x.id === d.prodiId);
     const pk = p ? (p.kode || p.nama) : '';
-    let label = d.nama + (pk ? ' — ' + pk : '') + (d.kode ? ' — ' + d.kode : '');
+    let label = d.nama + (pk ? ' — ' + pk : '') + (dosenIdent(d) ? ' — ' + dosenIdent(d) : '');
     let base = label, n = 2;
     while (dosenMap.has(label)) { label = base + ' #' + n; n++; }
     return label;
@@ -1350,7 +1353,7 @@ function bindJenisRuangEditor(panel) {
 
 // ---------- Export / Import Mata Kuliah (Excel .xlsx) ----------
 // Satu baris = MK lengkap + Kelas + Dosen (mendukung dosen berbeda tiap kelas).
-const OFFER_HEADER = ['prodi_kode', 'kode_mk', 'nama_mk', 'sks_teori', 'sks_praktik', 'semester', 'jenis_ruang', 'kelas', 'dosen', 'nip_nidn'];
+const OFFER_HEADER = ['prodi_kode', 'kode_mk', 'nama_mk', 'sks_teori', 'sks_praktik', 'semester', 'jenis_ruang', 'kelas', 'dosen', 'nidn_nuptk'];
 
 function tulisXLSX(namaFile, aoa, sheet) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -1368,7 +1371,7 @@ function bindOfferExportImport(panel) {
 }
 
 // ---------- Export / Import Dosen ----------
-const DOSEN_HEADER = ['prodi_kode', 'nip_nidn', 'nama'];
+const DOSEN_HEADER = ['prodi_kode', 'nidn', 'nuptk', 'nama'];
 
 function bindDosenExportImport(panel) {
   panel.querySelector('[data-template]').addEventListener('click', downloadDosenTemplate);
@@ -1382,7 +1385,7 @@ function exportDosen() {
   const aoa = [DOSEN_HEADER];
   dosenAktif().forEach(d => {
     const prodi = DB.prodi.find(p => p.id === d.prodiId);
-    aoa.push([prodi ? prodi.kode : '', d.kode || '', d.nama || '']);
+    aoa.push([prodi ? prodi.kode : '', d.nidn || '', d.nuptk || '', d.nama || '']);
   });
   tulisXLSX('dosen.xlsx', aoa, 'Dosen');
   toast('Data dosen diekspor');
@@ -1393,8 +1396,9 @@ function downloadDosenTemplate() {
   const pk = prodi ? prodi.kode : 'PGSD';
   const aoa = [
     DOSEN_HEADER,
-    [pk, '0912345678', 'Dr. Contoh Dosen, M.Pd.'],
-    [pk, '', 'Nama Dosen Tanpa NIDN']
+    [pk, '0912345678', '', 'Dr. Contoh Dosen, M.Pd.'],
+    [pk, '', '1234567890123456', 'Dosen dengan NUPTK'],
+    [pk, '', '', 'Nama Dosen Tanpa Identitas (Non Home Base / LB)']
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Dosen');
@@ -1428,7 +1432,7 @@ async function importDosen(file) {
       if (!prodi) { gagal++; errs.push(`Baris ${i + 1}: prodi "${get('prodi_kode')}" tidak ditemukan`); continue; }
       prodiId = prodi.id;
     }
-    const res = await api('POST', '/api/dosen', { prodiId, kode: get('nip_nidn'), nama });
+    const res = await api('POST', '/api/dosen', { prodiId, nidn: get('nidn'), nuptk: get('nuptk'), nama });
     if (res.ok) ok++; else { gagal++; errs.push(`Baris ${i + 1}: ${res.data.error || 'gagal'}`); }
   }
   await loadDB();
@@ -1731,11 +1735,11 @@ function exportOffer() {
     const kelas = DB.kelas.find(k => k.id === m.kelasId);
     const dosenObjs = dosenIdsOf(m).map(id => DB.dosen.find(x => x.id === id)).filter(Boolean);
     const dosenNama = dosenObjs.map(d => d.nama).join('; ');
-    const dosenNidn = dosenObjs.map(d => d.kode || '').join('; ');
+    const dosenIdentStr = dosenObjs.map(d => dosenIdent(d)).join('; ');
     aoa.push([
       prodi ? prodi.kode : '', m.kode || '', m.nama || '',
       m.sksTeori != null ? m.sksTeori : 0, m.sksPraktik != null ? m.sksPraktik : 0,
-      m.semester || '', m.jenisRuang || 'Kelas', kelas ? kelas.nama : '', dosenNama, dosenNidn
+      m.semester || '', m.jenisRuang || 'Kelas', kelas ? kelas.nama : '', dosenNama, dosenIdentStr
     ]);
   });
   tulisXLSX('mata-kuliah.xlsx', aoa, 'Mata Kuliah');
@@ -1750,15 +1754,15 @@ function downloadOfferTemplate() {
   const contohLab = (DB.jenisRuang || []).find(x => x !== 'Kelas') || 'Lab Komputer';
   const aoa = [
     OFFER_HEADER,
-    [pk, pk + '101', 'Contoh MK Teori', 3, 0, 2, 'Kelas', kelas0 ? kelas0.nama : 'PGSD-2A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? (dosen0.kode || '') : '0912345678'],
-    [pk, pk + '102', 'Contoh MK Praktik', 2, 1, 4, contohLab, kelas0 ? kelas0.nama : 'PGSD-4A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? (dosen0.kode || '') : '0912345678']
+    [pk, pk + '101', 'Contoh MK Teori', 3, 0, 2, 'Kelas', kelas0 ? kelas0.nama : 'PGSD-2A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? dosenIdent(dosen0) : '0912345678'],
+    [pk, pk + '102', 'Contoh MK Praktik', 2, 1, 4, contohLab, kelas0 ? kelas0.nama : 'PGSD-4A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? dosenIdent(dosen0) : '0912345678']
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Mata Kuliah');
   const ref = [['Kode Prodi', 'Nama Program Studi']].concat(DB.prodi.map(p => [p.kode, p.nama]))
     .concat([[''], ['Kategori Jenis Ruang']]).concat((DB.jenisRuang || []).map(x => [x]))
     .concat([[''], ['Kelas']]).concat(DB.kelas.map(k => [k.nama]))
-    .concat([[''], ['Dosen', 'NIP/NIDN']]).concat(dosenAktif().map(d => [d.nama, d.kode || '']));
+    .concat([[''], ['Dosen', 'NIDN', 'NUPTK']]).concat(dosenAktif().map(d => [d.nama, d.nidn || '', d.nuptk || '']));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ref), 'Referensi');
   XLSX.writeFile(wb, 'template-mata-kuliah.xlsx');
   toast('Template diunduh');
@@ -1775,6 +1779,8 @@ async function importOffer(file) {
   // Kompatibilitas file lama: 'kode' = kode_mk, 'nama' = nama_mk.
   if (idx.kode_mk === -1) idx.kode_mk = head.indexOf('kode');
   if (idx.nama_mk === -1) idx.nama_mk = head.indexOf('nama');
+  if (idx.nidn_nuptk === -1) idx.nidn_nuptk = head.indexOf('nidn'); // kompatibilitas
+  if (idx.nidn_nuptk === -1) idx.nidn_nuptk = head.indexOf('nip_nidn'); // kompatibilitas file lama
   if (idx.prodi_kode === -1 || idx.nama_mk === -1 || idx.kelas === -1 || idx.dosen === -1)
     return toast('Header wajib: prodi_kode, nama_mk (atau nama), kelas, dosen', 'err');
 
@@ -1802,23 +1808,23 @@ async function importOffer(file) {
       if (!res.ok) { gagal++; errs.push(`Baris ${i + 1}: gagal buat kelas "${kelasNama}"`); continue; }
       kelas = res.data; kelasList.push(kelas); kelasBaru++;
     }
-    // Dosen: banyak dosen dipisah HANYA dengan ';' (koma adalah bagian gelar). Cocokkan by NIP/NIDN dulu, lalu nama.
+    // Dosen: banyak dosen dipisah HANYA dengan ';' (koma bagian gelar). Satu kolom identitas dicocokkan ke NIDN atau NUPTK, lalu nama.
     const namaDosenList = dosenNama.split(';').map(s => s.trim()).filter(Boolean);
-    const nidnRaw = idx.nip_nidn >= 0 ? get('nip_nidn') : '';
-    const nidnList = nidnRaw ? nidnRaw.split(';').map(s => s.trim()) : [];
+    const identRaw = idx.nidn_nuptk >= 0 ? get('nidn_nuptk') : '';
+    const identList = identRaw ? identRaw.split(';').map(s => s.trim()) : [];
     const dosenIds = [];
     let dosenGagal = false;
+    const matchIdent = (d, v) => v && (String(d.nidn || '').toLowerCase() === v.toLowerCase() || String(d.nuptk || '').toLowerCase() === v.toLowerCase());
     for (let di = 0; di < namaDosenList.length; di++) {
       const dn = namaDosenList[di];
-      const nidn = (nidnList[di] || '').trim();
-      // 1) cocok NIP/NIDN (lintas prodi, homebase dipertahankan) → 2) nama prodi ini → 3) nama prodi mana pun.
-      // Nama dicocokkan setelah dinormalisasi agar beda spasi gelar tetap dikenali sama.
+      const ident = (identList[di] || '').trim();
+      // 1) cocok NIDN atau NUPTK (lintas prodi) → 2) nama prodi ini → 3) nama prodi mana pun.
       const dnN = normNama(dn);
-      let dosen = nidn ? dosenList.find(d => (d.kode || '').toLowerCase() === nidn.toLowerCase()) : null;
+      let dosen = ident ? dosenList.find(d => matchIdent(d, ident)) : null;
       if (!dosen) dosen = dosenList.find(d => d.prodiId === prodi.id && normNama(d.nama) === dnN)
         || dosenList.find(d => normNama(d.nama) === dnN);
       if (!dosen) {
-        const res = await api('POST', '/api/dosen', { nama: dn, kode: nidn || '', prodiId: prodi.id });
+        const res = await api('POST', '/api/dosen', { nama: dn, nidn: ident, nuptk: '', prodiId: prodi.id });
         if (!res.ok) { gagal++; errs.push(`Baris ${i + 1}: gagal buat dosen "${dn}"`); dosenGagal = true; break; }
         dosen = res.data; dosenList.push(dosen); dosenBaru++;
       }
