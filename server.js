@@ -55,14 +55,15 @@ function userFromReq(req) {
   if (!s || s.exp < Date.now()) { SESSIONS.delete(m[1]); return null; }
   return DB.users.find(u => u.id === s.userId) || null;
 }
-function pubUser(u) { return { id: u.id, username: u.username, nama: u.nama, role: u.role, prodiId: u.prodiId || null, fakultasId: u.fakultasId || null }; }
+function pubUser(u) { return { id: u.id, username: u.username, nama: u.nama, role: u.role, prodiId: u.prodiId || null, fakultasId: u.fakultasId || null, kategori: u.kategori || null }; }
 // Info pengguna lengkap untuk panel Kelola Pengguna (tanpa hash password).
 function pubUserFull(u) {
   let lingkup = '-';
   if (u.role === 'admin') lingkup = 'Semua (master)';
   else if (u.role === 'prodi') { const p = DB.prodi.find(x => x.id === u.prodiId); lingkup = p ? (p.kode ? p.kode + ' ' + p.nama : p.nama) : '(prodi terhapus)'; }
   else if (u.role === 'fakultas') { const f = DB.fakultas.find(x => x.id === u.fakultasId); lingkup = f ? (f.kode ? f.kode + ' — ' + f.nama : f.nama) : '(fakultas terhapus)'; }
-  return { id: u.id, username: u.username, nama: u.nama, role: u.role, prodiId: u.prodiId || null, fakultasId: u.fakultasId || null, nonaktif: !!u.nonaktif, lingkup };
+  else if (u.role === 'kategori') lingkup = 'Kategori MK: ' + (u.kategori || '-');
+  return { id: u.id, username: u.username, nama: u.nama, role: u.role, prodiId: u.prodiId || null, fakultasId: u.fakultasId || null, kategori: u.kategori || null, nonaktif: !!u.nonaktif, lingkup };
 }
 // Himpunan id prodi dalam sebuah fakultas.
 function prodiIdsOfFakultas(fakultasId) {
@@ -98,6 +99,14 @@ function seedUsers() {
       DB.users.push({ id: uid('user'), username: uname, nama: f.nama, role: 'fakultas', fakultasId: f.id, pass: hashPassword(uname) });
     }
   });
+  // Akun kategori mata kuliah (read-only) untuk MKDU & AIK.
+  let _katRenamed = false;
+  [['mkdu', 'MKDU'], ['aik', 'AIK']].forEach(([uname, kat]) => {
+    const existing = DB.users.find(u => u.role === 'kategori' && u.kategori === kat);
+    if (!existing) DB.users.push({ id: uid('user'), username: uname, nama: kat, role: 'kategori', kategori: kat, pass: hashPassword(uname) });
+    else if (existing.nama === 'Koordinator ' + kat) { existing.nama = kat; _katRenamed = true; }
+  });
+  if (_katRenamed) saveDB();
 }
 // Data yang dikirim ke frontend, disaring sesuai peran.
 function dbForUser(u) {
@@ -127,6 +136,13 @@ function dbForUser(u) {
     // Ruangan milik fakultasnya + ruang daring (bersama).
     base.ruangan = DB.ruangan.filter(r => r.daring || r.fakultasId === u.fakultasId);
     // dosenSemua tetap berisi semua dosen agar bisa memilih dosen lintas fakultas.
+  } else if (u.role === 'kategori') {
+    // Akun kategori: hanya melihat MK & jadwal sesuai kategorinya (lintas prodi/fakultas), read-only.
+    const inKat = m => kategoriMkShort(m.kategori) === u.kategori;
+    base.matakuliah = DB.matakuliah.filter(inKat);
+    base.matakuliahSemua = base.matakuliah;
+    const mkIds = new Set(base.matakuliah.map(m => m.id));
+    base.jadwal = DB.jadwal.filter(j => mkIds.has(j.matakuliahId));
   }
   return base;
 }
@@ -233,6 +249,14 @@ function findLBProdi() {
 }
 // Identitas dosen (untuk homebase & penjadwalan): NIDN diutamakan, lalu NUPTK.
 function dosenIdent(d) { return String((d && d.nidn) || '').trim() || String((d && d.nuptk) || '').trim(); }
+// Kategori MK singkat (Prodi/Fakultas/MKDU/AIK) untuk penyaringan akun kategori.
+function kategoriMkShort(v) {
+  if (/AIK/i.test(v)) return 'AIK';
+  if (/MKDU/i.test(v)) return 'MKDU';
+  if (/Fakultas/i.test(v)) return 'Fakultas';
+  if (/Prodi|Program\s*Studi/i.test(v)) return 'Prodi';
+  return v || 'Prodi';
+}
 function loadDB() {
   ensureDirs();
   if (fs.existsSync(DB_FILE)) {
@@ -420,6 +444,16 @@ function autoGenerate(opts) {
 
   if (replace) {
     DB.jadwal = DB.jadwal.filter(j => !scopeFilter(j));
+  }
+
+  // Blokir bila masih ada MK (dalam lingkup) yang belum punya dosen.
+  const dalamLingkup = (mk) => samePeriode(mk, periode)
+    && (!prodiId || mk.prodiId === prodiId)
+    && (!fakPids || fakPids.has(mk.prodiId))
+    && (!semester || Number(mk.semester) === semester);
+  const tanpaDosen = DB.matakuliah.filter(mk => dalamLingkup(mk) && dosenSetOf(mk).length === 0);
+  if (tanpaDosen.length) {
+    return { blocked: true, jumlahTanpaDosen: tanpaDosen.length, tanpaDosen: tanpaDosen.slice(0, 50).map(mk => ({ nama: mk.nama, kode: mk.kode || '', semester: mk.semester })) };
   }
 
   // Basis cek bentrok: hanya jadwal pada periode aktif.
@@ -671,7 +705,7 @@ function validate(col, o) {
     prodi: ['nama', 'fakultasId'],
     dosen: ['nama'],
     ruangan: ['nama'],
-    matakuliah: ['nama', 'prodiId', 'semester', 'kelasId', 'dosenId'],
+    matakuliah: ['nama', 'prodiId', 'semester', 'kelasId'],
     kelas: ['nama', 'prodiId', 'semester'],
     semester: ['nomor'],
     tahunAkademik: ['nama'],
@@ -874,6 +908,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     if (user.role === 'fakultas') body.fakultasId = user.fakultasId;
     const result = autoGenerate(body);
+    if (result && result.blocked) return sendJSON(res, 400, Object.assign({ error: 'Masih ada mata kuliah yang belum memiliki dosen' }, result));
     return sendJSON(res, 200, result);
   }
 
@@ -884,6 +919,11 @@ async function handleApi(req, res, url) {
   const isWrite = req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE';
   if (isWrite && user.role === 'prodi') {
     if (!PRODI_WRITABLE.includes(col)) return sendJSON(res, 403, { error: 'Akun prodi tidak berhak mengubah data ini' });
+  }
+  // Akun kategori: hanya-baca, kecuali mengubah DOSEN pada MK di kategorinya.
+  if (isWrite && user.role === 'kategori') {
+    const okDosenEdit = req.method === 'PUT' && col === 'matakuliah';
+    if (!okDosenEdit) return sendJSON(res, 403, { error: 'Akun kategori hanya dapat melihat data' });
   }
   // Akun fakultas: tidak boleh membuat/menghapus fakultas (hanya ubah miliknya).
   if (isWrite && user.role === 'fakultas' && col === 'fakultas' && req.method !== 'PUT') {
@@ -974,7 +1014,13 @@ async function handleApi(req, res, url) {
       if (FAKULTAS_PRODISCOPED.includes(col) && col !== 'prodi' && !inUserFakultas(user, exist.prodiId))
         return sendJSON(res, 403, { error: 'Bukan data fakultas Anda' });
     }
+    if (user.role === 'kategori' && (col !== 'matakuliah' || kategoriMkShort(DB[col][idx].kategori) !== user.kategori))
+      return sendJSON(res, 403, { error: 'Bukan mata kuliah kategori Anda' });
     const body = await readBody(req);
+    // Akun kategori: hanya boleh mengubah dosen pengampu.
+    if (user.role === 'kategori') {
+      Object.keys(body).forEach(k => { if (k !== 'dosenId' && k !== 'dosenIds' && k !== 'force') delete body[k]; });
+    }
     if (user.role === 'prodi') body.prodiId = user.prodiId;
     if (user.role === 'fakultas') {
       if (col === 'prodi') body.fakultasId = user.fakultasId; // tetap di fakultasnya

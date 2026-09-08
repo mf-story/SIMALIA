@@ -10,6 +10,7 @@ let currentUser = null;
 const isProdi = () => currentUser && currentUser.role === 'prodi';
 const isFakultas = () => currentUser && currentUser.role === 'fakultas';
 const isAdmin = () => currentUser && currentUser.role === 'admin';
+const isKategori = () => currentUser && currentUser.role === 'kategori';
 
 // ---------- Utilitas ----------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -96,6 +97,8 @@ function dosenPilihan() {
 }
 // Identitas dosen (untuk homebase & penjadwalan): NIDN diutamakan, lalu NUPTK.
 function dosenIdent(d) { return String((d && d.nidn) || '').trim() || String((d && d.nuptk) || '').trim(); }
+// Bersihkan NIDN/NUPTK dari apostrof/spasi depan (Excel/CSV kadang menambah ' agar angka utuh).
+function bersihId(v) { return String(v == null ? '' : v).trim().replace(/^['\u2018\u2019]+/, '').trim(); }
 // Kelas pada periode aktif. Kelas terikat periode.
 function kelasAktif() {
   const p = DB.pengaturan || {};
@@ -124,6 +127,15 @@ function slotsForHari(hari) {
 // =====================================================================
 // SKEMA MASTER DATA
 // =====================================================================
+// Kategori mata kuliah (label singkat).
+const MK_KATEGORI = ['Prodi', 'Fakultas', 'MKDU', 'AIK'];
+function kategoriMkShort(v) {
+  if (/AIK/i.test(v)) return 'AIK';
+  if (/MKDU/i.test(v)) return 'MKDU';
+  if (/Fakultas/i.test(v)) return 'Fakultas';
+  if (/Prodi|Program\s*Studi/i.test(v)) return 'Prodi';
+  return v || 'Prodi';
+}
 const SCHEMAS = {
   fakultas: {
     label: 'Fakultas',
@@ -179,8 +191,9 @@ const SCHEMAS = {
     label: 'Mata Kuliah',
     columns: [
       { k: 'kode', t: 'Kode MK' }, { k: 'nama', t: 'Nama MK' },
+      { k: 'kategori', t: 'Kategori MK', fmt: r => kategoriMkShort(r.kategori) },
       { k: 'kelasId', t: 'Kelas', ref: 'kelas' },
-      { k: 'dosenId', t: 'Dosen', fmt: r => dosenNamaOf(r) },
+      { k: 'dosenId', t: 'Dosen', fmt: r => dosenNamaOf(r) || '—' },
       { k: 'sks', t: 'SKS', fmt: r => ((Number(r.sksTeori) || 0) + (Number(r.sksPraktik) || 0)) || (r.sks || 0) },
       { k: 'semester', t: 'Smt' }, { k: 'prodiId', t: 'Program Studi', ref: 'prodi' }
     ],
@@ -280,7 +293,7 @@ function renderUserBox() {
   const u = currentUser || {};
   box.innerHTML = `
     <div class="userinfo"><b>${esc(u.nama || u.username || '')}</b>
-      <span class="rolebadge ${u.role}">${u.role === 'admin' ? 'Admin' : (u.role === 'fakultas' ? 'Fakultas' : 'Prodi')}</span></div>
+      <span class="rolebadge ${u.role}">${u.role === 'admin' ? 'Admin' : u.role === 'fakultas' ? 'Fakultas' : u.role === 'kategori' ? 'Universitas' : 'Prodi'}</span></div>
     <button class="btn" id="btnGantiPass" title="Ganti password">🔑</button>
     <button class="btn" id="btnLogout">Keluar</button>`;
   $('#btnLogout').addEventListener('click', logout);
@@ -302,10 +315,17 @@ function openGantiPass() {
 // Sembunyikan tab & tombol sesuai peran.
 function applyRole() {
   const prodi = isProdi();
-  const allow = ['jadwal', 'dosen', 'matakuliah', 'kelas', 'beban']; // prodi: jadwal hanya-baca
-  $$('#tabs .tab').forEach(b => { b.hidden = (prodi && !allow.includes(b.dataset.tab)) || (b.dataset.admin === '1' && !isAdmin()); });
-  // Prodi: jadwal read-only → sembunyikan tombol tulis (biarkan Cetak SK & Export Excel).
-  ['btnAuto', 'btnTambahJadwal', 'btnResetJadwal'].forEach(id => { const el = $('#' + id); if (el) el.hidden = prodi; });
+  const kat = isKategori();
+  const allowProdi = ['jadwal', 'dosen', 'matakuliah', 'kelas', 'beban']; // prodi: jadwal hanya-baca
+  const allowKat = ['jadwal', 'matakuliah', 'beban']; // kategori: lihat MK & jadwal (read-only) + beban dosen
+  $$('#tabs .tab').forEach(b => {
+    let hide = (b.dataset.admin === '1' && !isAdmin());
+    if (prodi && !allowProdi.includes(b.dataset.tab)) hide = true;
+    if (kat && !allowKat.includes(b.dataset.tab)) hide = true;
+    b.hidden = hide;
+  });
+  // Prodi/Kategori: jadwal read-only → sembunyikan tombol tulis (biarkan Cetak SK & Export Excel).
+  ['btnAuto', 'btnTambahJadwal', 'btnResetJadwal'].forEach(id => { const el = $('#' + id); if (el) el.hidden = prodi || kat; });
   // Bila tab aktif tersembunyi, pindah ke tab pertama yang terlihat.
   const act = $('#tabs .tab.active');
   if (act && act.hidden) {
@@ -723,6 +743,8 @@ function renderActive() {
 // =====================================================================
 let masterProdiFak = ''; // filter fakultas pada tab Program Studi
 let masterMkDosen = ''; // filter dosen pada tab Mata Kuliah
+let masterMkFak = ''; // filter fakultas pada tab Mata Kuliah
+let masterMkProdi = ''; // filter prodi pada tab Mata Kuliah
 let masterRuangFak = ''; // filter fakultas pada tab Ruangan
 let jrEditFak = ''; // fakultas yang sedang diedit kategori ruangnya ('' = default global)
 let masterDosenFak = ''; // filter fakultas pada tab Dosen
@@ -735,12 +757,15 @@ function renderMaster(col) {
       : col === 'kelas' ? kelasAktif()
         : col === 'semester' ? semesterSesuaiPeriode() : (DB[col] || []);
   if (col === 'prodi' && masterProdiFak) rows = rows.filter(p => p.fakultasId === masterProdiFak);
-  if (col === 'matakuliah' && masterMkDosen) rows = rows.filter(m => dosenIdsOf(m).includes(masterMkDosen));
+  if (col === 'matakuliah' && masterMkFak) rows = rows.filter(m => { const p = DB.prodi.find(x => x.id === m.prodiId); return p && p.fakultasId === masterMkFak; });
+  if (col === 'matakuliah' && masterMkProdi) rows = rows.filter(m => m.prodiId === masterMkProdi);
+  if (col === 'matakuliah' && masterMkDosen === '__none__') rows = rows.filter(m => dosenIdsOf(m).length === 0);
+  else if (col === 'matakuliah' && masterMkDosen) rows = rows.filter(m => dosenIdsOf(m).includes(masterMkDosen));
   if (col === 'ruangan' && masterRuangFak) rows = rows.filter(r => r.fakultasId === masterRuangFak);
   if (col === 'dosen' && masterDosenFak) rows = rows.filter(d => { const p = DB.prodi.find(x => x.id === d.prodiId); return p && p.fakultasId === masterDosenFak; });
   if (col === 'dosen' && masterDosenProdi) rows = rows.filter(d => d.prodiId === masterDosenProdi);
-  const bulk = (col === 'matakuliah' || col === 'dosen' || col === 'kelas');
-  const hasIO = ['matakuliah', 'dosen', 'ruangan', 'kelas', 'fakultas', 'prodi'].includes(col);
+  const bulk = (col === 'matakuliah' || col === 'dosen' || col === 'kelas') && !isKategori();
+  const hasIO = ['matakuliah', 'dosen', 'ruangan', 'kelas', 'fakultas', 'prodi'].includes(col) && !isKategori();
   const extraBtn = hasIO
     ? `<button class="btn" data-template="1">📄 Template</button>
        <button class="btn" data-export="1">⬇️ Export</button>
@@ -751,7 +776,7 @@ function renderMaster(col) {
   let html = `
     <div class="toolbar">
       <h2>${esc(s.label)} <span class="count">${rows.length}</span></h2>
-      <div class="actions">${extraBtn}<button class="btn primary" data-add="${col}">+ Tambah ${esc(s.label)}</button></div>
+      <div class="actions">${extraBtn}${isKategori() ? '' : `<button class="btn primary" data-add="${col}">+ Tambah ${esc(s.label)}</button>`}</div>
     </div>`;
   if (col === 'prodi') {
     const opts = DB.fakultas.map(f => `<option value="${f.id}" ${masterProdiFak === f.id ? 'selected' : ''}>${esc(f.kode ? f.kode + ' — ' + f.nama : f.nama)}</option>`).join('');
@@ -759,14 +784,18 @@ function renderMaster(col) {
       <select id="prodiFakFilter"><option value="">Semua Fakultas</option>${opts}</select></label></div>`;
   }
   if (col === 'matakuliah') {
-    // Daftar dosen yang mengampu pada periode aktif (unik), untuk filter.
+    const fakOpts = DB.fakultas.map(f => `<option value="${f.id}" ${masterMkFak === f.id ? 'selected' : ''}>${esc(f.kode ? f.kode + ' — ' + f.nama : f.nama)}</option>`).join('');
+    const prodiSrc = DB.prodi.filter(p => !masterMkFak || p.fakultasId === masterMkFak);
+    const prodiOpts = prodiSrc.map(p => `<option value="${p.id}" ${masterMkProdi === p.id ? 'selected' : ''}>${esc(p.kode ? p.kode + ' ' + p.nama : p.nama)}</option>`).join('');
     const idset = new Set();
     mkAktif().forEach(m => dosenIdsOf(m).forEach(id => idset.add(id)));
-    const opts = dosenAktif().filter(d => idset.has(d.id))
+    const dOpts = dosenAktif().filter(d => idset.has(d.id))
       .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
       .map(d => `<option value="${d.id}" ${masterMkDosen === d.id ? 'selected' : ''}>${esc(d.nama)}${dosenIdent(d) ? ' (' + esc(dosenIdent(d)) + ')' : ''}</option>`).join('');
-    html += `<div class="filters" style="margin-bottom:14px"><label>Dosen
-      <select id="mkDosenFilter"><option value="">Semua Dosen</option>${opts}</select></label></div>`;
+    html += `<div class="filters" style="margin-bottom:14px">
+      <label>Fakultas <select id="mkFakFilter"><option value="">Semua Fakultas</option>${fakOpts}</select></label>
+      <label>Program Studi <select id="mkProdiFilter"><option value="">Semua Prodi</option>${prodiOpts}</select></label>
+      <label>Dosen <select id="mkDosenFilter"><option value="">Semua Dosen</option><option value="__none__" ${masterMkDosen === '__none__' ? 'selected' : ''}>— Belum ada dosen —</option>${dOpts}</select></label></div>`;
   }
   if (col === 'ruangan' && !isFakultas() && DB.fakultas.length) {
     const opts = DB.fakultas.map(f => `<option value="${f.id}" ${masterRuangFak === f.id ? 'selected' : ''}>${esc(f.kode ? f.kode + ' — ' + f.nama : f.nama)}</option>`).join('');
@@ -800,7 +829,7 @@ function renderMaster(col) {
     html += '<div class="table-wrap"><table><thead><tr>';
     if (bulk) html += '<th class="col-chk"><input type="checkbox" id="chkAll" title="Pilih semua"></th>';
     s.columns.forEach(c => html += `<th>${esc(c.t)}</th>`);
-    html += '<th class="col-act">Aksi</th></tr></thead><tbody>';
+    html += ((isKategori() && col !== 'matakuliah') ? '' : '<th class="col-act">Aksi</th>') + '</tr></thead><tbody>';
     rows.forEach(r => {
       html += '<tr>';
       if (bulk) html += `<td class="col-chk"><input type="checkbox" class="rowchk" data-id="${r.id}"></td>`;
@@ -810,10 +839,12 @@ function renderMaster(col) {
         else if (c.ref) v = nameOf(c.ref, r[c.k]);
         html += `<td>${esc(v)}</td>`;
       });
-      html += `<td class="col-act">
+      html += (isKategori()
+        ? (col === 'matakuliah' ? `<td class="col-act"><button class="icon-btn" data-editdosen="${col}" data-id="${r.id}" title="Ubah dosen pengampu">✏️ Dosen</button></td>` : '')
+        : `<td class="col-act">
         <button class="icon-btn" data-edit="${col}" data-id="${r.id}" title="Ubah">✏️</button>
         <button class="icon-btn danger" data-del="${col}" data-id="${r.id}" title="Hapus">🗑️</button>
-      </td></tr>`;
+      </td>`) + '</tr>';
     });
     html += '</tbody></table></div>';
   }
@@ -824,12 +855,14 @@ function renderMaster(col) {
   if (col === 'ruangan') html = jenisRuangEditorHtml() + html;
   panel.innerHTML = html;
   const addBtn = col === 'matakuliah' ? () => openOfferingForm() : () => openRecordForm(col);
-  panel.querySelector('[data-add]').addEventListener('click', addBtn);
+  const addBtnEl = panel.querySelector('[data-add]');
+  if (addBtnEl) addBtnEl.addEventListener('click', addBtn);
   $$('[data-edit]', panel).forEach(b => b.addEventListener('click', () => {
     const rec = DB[col].find(x => x.id === b.dataset.id);
     if (col === 'matakuliah') openOfferingForm(rec); else openRecordForm(col, rec);
   }));
   $$('[data-del]', panel).forEach(b => b.addEventListener('click', () => delRecord(col, b.dataset.id)));
+  $$('[data-editdosen]', panel).forEach(b => b.addEventListener('click', () => openEditDosen(DB[col].find(x => x.id === b.dataset.id))));
   if (bulk) {
     const chkAll = panel.querySelector('#chkAll');
     const chks = $$('.rowchk', panel);
@@ -851,6 +884,10 @@ function renderMaster(col) {
     if (f) f.addEventListener('change', () => { masterProdiFak = f.value; renderMaster('prodi'); });
   }
   if (col === 'matakuliah') {
+    const ff = panel.querySelector('#mkFakFilter');
+    if (ff) ff.addEventListener('change', () => { masterMkFak = ff.value; masterMkProdi = ''; renderMaster('matakuliah'); });
+    const pf = panel.querySelector('#mkProdiFilter');
+    if (pf) pf.addEventListener('change', () => { masterMkProdi = pf.value; renderMaster('matakuliah'); });
     const f = panel.querySelector('#mkDosenFilter');
     if (f) f.addEventListener('change', () => { masterMkDosen = f.value; renderMaster('matakuliah'); });
   }
@@ -866,12 +903,12 @@ function renderMaster(col) {
   }
   if (col === 'slot') bindHariEditor(panel);
   if (col === 'ruangan') bindJenisRuangEditor(panel);
-  if (col === 'matakuliah') bindOfferExportImport(panel);
-  if (col === 'dosen') bindDosenExportImport(panel);
-  if (col === 'ruangan') bindRuanganExportImport(panel);
-  if (col === 'kelas') bindKelasExportImport(panel);
-  if (col === 'fakultas') bindFakultasExportImport(panel);
-  if (col === 'prodi') bindProdiExportImport(panel);
+  if (col === 'matakuliah' && hasIO) bindOfferExportImport(panel);
+  if (col === 'dosen' && hasIO) bindDosenExportImport(panel);
+  if (col === 'ruangan' && hasIO) bindRuanganExportImport(panel);
+  if (col === 'kelas' && hasIO) bindKelasExportImport(panel);
+  if (col === 'fakultas' && hasIO) bindFakultasExportImport(panel);
+  if (col === 'prodi' && hasIO) bindProdiExportImport(panel);
 }
 
 // ---------- Beban Dosen (rekap jumlah mengajar per dosen) ----------
@@ -882,7 +919,7 @@ function hitungBebanDosen() {
   const myMk = mkAktif();         // MK dalam lingkup akun (prodi/fakultas/semua)
   const prodiAll = (DB.prodiSemua && DB.prodiSemua.length) ? DB.prodiSemua : DB.prodi;
   // Dosen homebase (lingkup) + dosen "tamu" yang dipakai di MK lingkup ini.
-  const homebaseIds = new Set(dosenAktif().map(d => d.id));
+  const homebaseIds = new Set(isKategori() ? [] : dosenAktif().map(d => d.id));
   const shownIds = new Set(homebaseIds);
   myMk.forEach(m => dosenIdsOf(m).forEach(id => shownIds.add(id)));
   const dosenById = (id) => (DB.dosen || []).find(x => x.id === id) || (DB.dosenSemua || []).find(x => x.id === id);
@@ -906,8 +943,8 @@ function hitungBebanDosen() {
 function renderBebanDosen() {
   const panel = $('#panel-beban');
   const p = DB.pengaturan || {};
-  const scoped = isProdi() || isFakultas(); // lingkup terbatas → tampilkan kolom "MK di sini" & dosen tamu
-  const lingkupNama = isProdi() ? 'Prodi Ini' : (isFakultas() ? 'Fakultas Ini' : '');
+  const scoped = isProdi() || isFakultas() || isKategori(); // lingkup terbatas → tampilkan kolom "MK di sini" & dosen tamu
+  const lingkupNama = isProdi() ? 'Prodi Ini' : isFakultas() ? 'Fakultas Ini' : isKategori() ? ('Kategori ' + (currentUser.kategori || '')) : '';
   const fakOpts = DB.fakultas.map(f => `<option value="${f.id}" ${bebanState.fak === f.id ? 'selected' : ''}>${esc(f.kode ? f.kode + ' — ' + f.nama : f.nama)}</option>`).join('');
   const prodiSrc = DB.prodi.filter(pr => !bebanState.fak || pr.fakultasId === bebanState.fak);
   const prodiOpts = prodiSrc.map(pr => `<option value="${pr.id}" ${bebanState.prodi === pr.id ? 'selected' : ''}>${esc(pr.kode ? pr.kode + ' ' + pr.nama : pr.nama)}</option>`).join('');
@@ -1033,7 +1070,7 @@ async function renderPengguna() {
   const rank = { admin: 0, fakultas: 1, prodi: 2 };
   rows.sort((a, b) => (rank[a.role] - rank[b.role]) || a.username.localeCompare(b.username));
   const cnt = { admin: all.filter(u => u.role === 'admin').length, fakultas: all.filter(u => u.role === 'fakultas').length, prodi: all.filter(u => u.role === 'prodi').length };
-  const badge = (r) => `<span class="rolebadge2 ${r}">${r === 'admin' ? 'Admin' : r === 'fakultas' ? 'Fakultas' : 'Prodi'}</span>`;
+  const badge = (r) => `<span class="rolebadge2 ${r}">${r === 'admin' ? 'Admin' : r === 'fakultas' ? 'Fakultas' : r === 'kategori' ? 'Universitas' : 'Prodi'}</span>`;
   let html = `
     <div class="toolbar">
       <h2>Kelola Pengguna <span class="count">${all.length}</span></h2>
@@ -1121,6 +1158,63 @@ function openAddAdmin() {
 }
 
 // ---------- Form Penawaran Mata Kuliah (Master MK + Kelas + Dosen) ----------
+// Ubah hanya dosen pengampu sebuah mata kuliah (untuk akun kategori AIK/MKDU).
+function openEditDosen(mk) {
+  if (!mk) return;
+  const form = $('#modalForm');
+  form.innerHTML = `
+    <label class="field"><span>Mata Kuliah</span><input value="${esc(mk.nama || '')}" disabled /></label>
+    <label class="field"><span>Dosen Pengampu * <small class="hint-inline">(ketik untuk mencari; bisa lebih dari satu)</small></span>
+      <div id="dosenChips" class="chips"></div>
+      <input name="dosenCari" list="dosenList" autocomplete="off" placeholder="ketik nama / NIDN-NUPTK dosen lalu pilih" />
+      <datalist id="dosenList"></datalist></label>`;
+  const el = (n) => form.elements[n];
+  const dosenMap = new Map();
+  function labelDosen(d) {
+    const p = DB.prodi.find(x => x.id === d.prodiId);
+    const pk = p ? (p.kode || p.nama) : '';
+    let label = d.nama + (pk ? ' — ' + pk : '') + (dosenIdent(d) ? ' — ' + dosenIdent(d) : '');
+    let base = label, n = 2;
+    while (dosenMap.has(label)) { label = base + ' #' + n; n++; }
+    return label;
+  }
+  (function fill() {
+    dosenMap.clear();
+    const list = dosenPilihan().slice().sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+    $('#dosenList', form).innerHTML = list.map(d => { const l = labelDosen(d); dosenMap.set(l, d.id); return `<option value="${esc(l)}">`; }).join('');
+  })();
+  const selected = [];
+  (Array.isArray(mk.dosenIds) && mk.dosenIds.length ? mk.dosenIds : (mk.dosenId ? [mk.dosenId] : []))
+    .forEach(id => { if (!selected.includes(id)) selected.push(id); });
+  function renderChips() {
+    const box = $('#dosenChips', form);
+    if (!selected.length) { box.innerHTML = '<span class="hint" style="margin:2px 0">Belum ada dosen dipilih.</span>'; return; }
+    box.innerHTML = selected.map(id => {
+      const d = DB.dosen.find(x => x.id === id) || (DB.dosenSemua || []).find(x => x.id === id);
+      const nm = d ? d.nama : '(dosen)';
+      return `<span class="chip">${esc(nm)}<button type="button" class="chip-x" data-rm="${id}" title="Hapus">✕</button></span>`;
+    }).join('');
+    $$('.chip-x', box).forEach(b => b.addEventListener('click', () => { const i = selected.indexOf(b.dataset.rm); if (i >= 0) selected.splice(i, 1); renderChips(); }));
+  }
+  renderChips();
+  function tambah() { const v = el('dosenCari').value.trim(); const id = dosenMap.get(v); if (id) { if (!selected.includes(id)) selected.push(id); el('dosenCari').value = ''; renderChips(); } }
+  el('dosenCari').addEventListener('input', tambah);
+  el('dosenCari').addEventListener('change', tambah);
+  $('#modalTitle').textContent = 'Ubah Dosen Pengampu';
+  showModal(async (e) => {
+    e.preventDefault();
+    tambah();
+    const dosenIds = selected.slice();
+    if (!dosenIds.length) return setModalMsg('Minimal 1 dosen wajib dipilih', 'err');
+    const { ok, data } = await api('PUT', `/api/matakuliah/${mk.id}`, { dosenIds, dosenId: dosenIds[0] });
+    if (!ok) return setModalMsg(data.error || 'Gagal menyimpan', 'err');
+    await loadDB();
+    hideModal();
+    toast('Dosen pengampu diperbarui');
+    renderActive();
+  });
+}
+
 function openOfferingForm(record) {
   const form = $('#modalForm');
   const r = record || {};
@@ -1134,6 +1228,8 @@ function openOfferingForm(record) {
       <select name="prodiId" required><option value="">— pilih —</option>${prodiOpts}</select></label>
     <label class="field"><span>Semester *</span>
       <select name="semester" required><option value="">— pilih —</option>${semOpts}</select></label>
+    <label class="field"><span>Kategori Mata Kuliah</span>
+      <select name="kategori">${MK_KATEGORI.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></label>
     <label class="field"><span>Kode MK</span><input name="kode" /></label>
     <label class="field"><span>Mata Kuliah *</span>
       <input name="nama" list="mkNamaList" autocomplete="off" placeholder="ketik nama mata kuliah" required />
@@ -1146,7 +1242,7 @@ function openOfferingForm(record) {
       <select name="jenisRuang">${jrOpts}</select></label>
     <label class="field"><span>Kelas *</span>
       <select name="kelasId" required><option value="">— pilih kelas —</option></select></label>
-    <label class="field"><span>Dosen * <small class="hint-inline">(ketik untuk mencari; bisa lebih dari satu, boleh dari prodi lain)</small></span>
+    <label class="field"><span>Dosen (opsional) <small class="hint-inline">(ketik untuk mencari; bisa lebih dari satu, boleh dari prodi lain)</small></span>
       <div id="dosenChips" class="chips"></div>
       <input name="dosenCari" list="dosenList" autocomplete="off" placeholder="ketik nama / NIP-NIDN dosen lalu pilih" />
       <datalist id="dosenList"></datalist></label>`;
@@ -1206,6 +1302,7 @@ function openOfferingForm(record) {
       el('sksTeori').value = m.sksTeori != null ? m.sksTeori : '';
       el('sksPraktik').value = m.sksPraktik != null ? m.sksPraktik : '';
       if (m.jenisRuang) el('jenisRuang').value = m.jenisRuang;
+      if (m.kategori) el('kategori').value = kategoriMkShort(m.kategori);
     }
   }
 
@@ -1218,6 +1315,7 @@ function openOfferingForm(record) {
     el('sksTeori').value = r.sksTeori != null ? r.sksTeori : '';
     el('sksPraktik').value = r.sksPraktik != null ? r.sksPraktik : '';
     if (r.jenisRuang) el('jenisRuang').value = r.jenisRuang;
+    if (r.kategori) el('kategori').value = kategoriMkShort(r.kategori);
   }
   refill();
   // Dosen terpilih (bisa lebih dari satu).
@@ -1269,19 +1367,20 @@ function openOfferingForm(record) {
     const sksTeori = Number(el('sksTeori').value) || 0;
     const sksPraktik = Number(el('sksPraktik').value) || 0;
     const jenisRuang = el('jenisRuang').value || 'Kelas';
+    const kategori = el('kategori').value || 'Prodi';
     const kelasId = el('kelasId').value;
     tambahDosen(); // tangkap ketikan terakhir bila cocok
     const dosenIds = selectedDosen.slice();
     const dosenId = dosenIds[0] || '';
     if (el('dosenCari').value.trim() && !dosenIds.length) return setModalMsg('Dosen tidak dikenali — pilih dari daftar (ketik lalu pilih)', 'err');
-    if (!prodiId || !semester || !nama || !kelasId || !dosenId) return setModalMsg('Prodi, Semester, Mata Kuliah, Kelas, minimal 1 Dosen wajib diisi', 'err');
+    if (!prodiId || !semester || !nama || !kelasId) return setModalMsg('Prodi, Semester, Mata Kuliah, dan Kelas wajib diisi', 'err');
 
     // Cegah duplikasi penawaran (MK sama untuk kelas sama).
     const dup = mkAktif().find(m => (m.nama || '').toLowerCase() === nama.toLowerCase() &&
       m.prodiId === prodiId && Number(m.semester) === Number(semester) && m.kelasId === kelasId && (!record || m.id !== record.id));
     if (dup) return setModalMsg('Penawaran untuk mata kuliah & kelas ini sudah ada', 'err');
 
-    const body = { prodiId, kode, nama, sksTeori, sksPraktik, sks: sksTeori + sksPraktik, semester, jenisRuang, kelasId, dosenId, dosenIds };
+    const body = { prodiId, kode, nama, kategori, sksTeori, sksPraktik, sks: sksTeori + sksPraktik, semester, jenisRuang, kelasId, dosenId, dosenIds };
     const url = record ? `/api/matakuliah/${record.id}` : '/api/matakuliah';
     const { ok, data } = await api(record ? 'PUT' : 'POST', url, body);
     if (!ok) return setModalMsg(data.error || 'Gagal menyimpan', 'err');
@@ -1353,7 +1452,7 @@ function bindJenisRuangEditor(panel) {
 
 // ---------- Export / Import Mata Kuliah (Excel .xlsx) ----------
 // Satu baris = MK lengkap + Kelas + Dosen (mendukung dosen berbeda tiap kelas).
-const OFFER_HEADER = ['prodi_kode', 'kode_mk', 'nama_mk', 'sks_teori', 'sks_praktik', 'semester', 'jenis_ruang', 'kelas', 'dosen', 'nidn_nuptk'];
+const OFFER_HEADER = ['prodi_kode', 'kode_mk', 'nama_mk', 'kategori_mk', 'sks_teori', 'sks_praktik', 'semester', 'jenis_ruang', 'kelas', 'dosen', 'nidn_nuptk'];
 
 function tulisXLSX(namaFile, aoa, sheet) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -1432,7 +1531,7 @@ async function importDosen(file) {
       if (!prodi) { gagal++; errs.push(`Baris ${i + 1}: prodi "${get('prodi_kode')}" tidak ditemukan`); continue; }
       prodiId = prodi.id;
     }
-    const res = await api('POST', '/api/dosen', { prodiId, nidn: get('nidn'), nuptk: get('nuptk'), nama });
+    const res = await api('POST', '/api/dosen', { prodiId, nidn: bersihId(get('nidn')), nuptk: bersihId(get('nuptk')), nama });
     if (res.ok) ok++; else { gagal++; errs.push(`Baris ${i + 1}: ${res.data.error || 'gagal'}`); }
   }
   await loadDB();
@@ -1737,7 +1836,7 @@ function exportOffer() {
     const dosenNama = dosenObjs.map(d => d.nama).join('; ');
     const dosenIdentStr = dosenObjs.map(d => dosenIdent(d)).join('; ');
     aoa.push([
-      prodi ? prodi.kode : '', m.kode || '', m.nama || '',
+      prodi ? prodi.kode : '', m.kode || '', m.nama || '', kategoriMkShort(m.kategori),
       m.sksTeori != null ? m.sksTeori : 0, m.sksPraktik != null ? m.sksPraktik : 0,
       m.semester || '', m.jenisRuang || 'Kelas', kelas ? kelas.nama : '', dosenNama, dosenIdentStr
     ]);
@@ -1754,12 +1853,13 @@ function downloadOfferTemplate() {
   const contohLab = (DB.jenisRuang || []).find(x => x !== 'Kelas') || 'Lab Komputer';
   const aoa = [
     OFFER_HEADER,
-    [pk, pk + '101', 'Contoh MK Teori', 3, 0, 2, 'Kelas', kelas0 ? kelas0.nama : 'PGSD-2A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? dosenIdent(dosen0) : '0912345678'],
-    [pk, pk + '102', 'Contoh MK Praktik', 2, 1, 4, contohLab, kelas0 ? kelas0.nama : 'PGSD-4A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? dosenIdent(dosen0) : '0912345678']
+    [pk, pk + '101', 'Contoh MK Teori', 'Prodi', 3, 0, 2, 'Kelas', kelas0 ? kelas0.nama : 'PGSD-2A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? dosenIdent(dosen0) : '0912345678'],
+    [pk, pk + '102', 'Contoh MK Praktik', 'AIK', 2, 1, 4, contohLab, kelas0 ? kelas0.nama : 'PGSD-4A', dosen0 ? dosen0.nama : 'Nama Dosen', dosen0 ? dosenIdent(dosen0) : '0912345678']
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Mata Kuliah');
   const ref = [['Kode Prodi', 'Nama Program Studi']].concat(DB.prodi.map(p => [p.kode, p.nama]))
+    .concat([[''], ['Kategori Mata Kuliah']]).concat(MK_KATEGORI.map(x => [x]))
     .concat([[''], ['Kategori Jenis Ruang']]).concat((DB.jenisRuang || []).map(x => [x]))
     .concat([[''], ['Kelas']]).concat(DB.kelas.map(k => [k.nama]))
     .concat([[''], ['Dosen', 'NIDN', 'NUPTK']]).concat(dosenAktif().map(d => [d.nama, d.nidn || '', d.nuptk || '']));
@@ -1781,8 +1881,9 @@ async function importOffer(file) {
   if (idx.nama_mk === -1) idx.nama_mk = head.indexOf('nama');
   if (idx.nidn_nuptk === -1) idx.nidn_nuptk = head.indexOf('nidn'); // kompatibilitas
   if (idx.nidn_nuptk === -1) idx.nidn_nuptk = head.indexOf('nip_nidn'); // kompatibilitas file lama
-  if (idx.prodi_kode === -1 || idx.nama_mk === -1 || idx.kelas === -1 || idx.dosen === -1)
-    return toast('Header wajib: prodi_kode, nama_mk (atau nama), kelas, dosen', 'err');
+  if (idx.kategori_mk === -1) idx.kategori_mk = head.indexOf('kategori'); // kompatibilitas
+  if (idx.prodi_kode === -1 || idx.nama_mk === -1 || idx.kelas === -1)
+    return toast('Header wajib: prodi_kode, nama_mk (atau nama), kelas', 'err');
 
   // Cache lokal agar dosen/kelas baru bisa dipakai ulang antar baris.
   // Dosen dicocokkan lintas prodi: dosen homebase prodi lain tetap dikenali (tak diduplikasi).
@@ -1799,7 +1900,7 @@ async function importOffer(file) {
     const semester = Number(get('semester')) || 1;
     const kelasNama = get('kelas');
     const dosenNama = get('dosen');
-    if (!kelasNama || !dosenNama) { gagal++; errs.push(`Baris ${i + 1}: kelas/dosen kosong`); continue; }
+    if (!kelasNama) { gagal++; errs.push(`Baris ${i + 1}: kelas kosong`); continue; }
 
     // Kelas: pakai yang ada atau buat baru (default 40 mahasiswa, ≤ kapasitas ruang).
     let kelas = kelasList.find(k => k.prodiId === prodi.id && (k.nama || '').toLowerCase() === kelasNama.toLowerCase());
@@ -1814,10 +1915,10 @@ async function importOffer(file) {
     const identList = identRaw ? identRaw.split(';').map(s => s.trim()) : [];
     const dosenIds = [];
     let dosenGagal = false;
-    const matchIdent = (d, v) => v && (String(d.nidn || '').toLowerCase() === v.toLowerCase() || String(d.nuptk || '').toLowerCase() === v.toLowerCase());
+    const matchIdent = (d, v) => { v = bersihId(v).toLowerCase(); return v && (bersihId(d.nidn).toLowerCase() === v || bersihId(d.nuptk).toLowerCase() === v); };
     for (let di = 0; di < namaDosenList.length; di++) {
       const dn = namaDosenList[di];
-      const ident = (identList[di] || '').trim();
+      const ident = bersihId(identList[di]);
       // 1) cocok NIDN atau NUPTK (lintas prodi) → 2) nama prodi ini → 3) nama prodi mana pun.
       const dnN = normNama(dn);
       let dosen = ident ? dosenList.find(d => matchIdent(d, ident)) : null;
@@ -1834,13 +1935,15 @@ async function importOffer(file) {
 
     let jr = get('jenis_ruang');
     if (jr) { const f = jenisRuangFor(prodi.fakultasId).find(x => x.toLowerCase() === jr.toLowerCase()); if (f) jr = f; }
+    let kategori = get('kategori_mk');
+    kategori = kategori ? kategoriMkShort(kategori) : 'Prodi';
     const teori = Number(get('sks_teori')) || 0;
     const praktik = Number(get('sks_praktik')) || 0;
     if (mkAktif().some(m => (m.nama || '').toLowerCase() === nama.toLowerCase() && m.prodiId === prodi.id && Number(m.semester) === semester && m.kelasId === kelas.id)) {
       gagal++; errs.push(`Baris ${i + 1}: penawaran sudah ada`); continue;
     }
     const body = {
-      prodiId: prodi.id, kode: get('kode_mk'), nama, sksTeori: teori, sksPraktik: praktik,
+      prodiId: prodi.id, kode: get('kode_mk'), nama, kategori, sksTeori: teori, sksPraktik: praktik,
       sks: teori + praktik, semester, jenisRuang: jr || 'Kelas', kelasId: kelas.id,
       dosenId: dosenIds[0], dosenIds
     };
@@ -2165,7 +2268,7 @@ function ruangKategori(j) {
 // RENDER JADWAL
 // =====================================================================
 // Prodi = hanya-baca; admin & fakultas boleh ubah/hapus jadwal.
-function canEditJadwal() { return !isProdi(); }
+function canEditJadwal() { return !isProdi() && !isKategori(); }
 
 // Unduh jadwal (sesuai filter aktif) ke Excel.
 function exportJadwal() {
@@ -2549,7 +2652,10 @@ function openAutoForm() {
       menitPerSks: Number(form.elements['menitPerSks'].value) || 45
     };
     const { ok, data } = await api('POST', '/api/auto-generate', body);
-    if (!ok) return setModalMsg(data.error || 'Gagal', 'err');
+    if (!ok) {
+      if (data.blocked) return setModalMsg(`Auto-generate dibatalkan: masih ada ${data.jumlahTanpaDosen} mata kuliah yang belum memiliki dosen. Lengkapi dosennya dulu (gunakan filter “— Belum ada dosen —” di tab Mata Kuliah).`, 'err');
+      return setModalMsg(data.error || 'Gagal', 'err');
+    }
     await loadDB();
     hideModal();
     let msg = `${data.created} jadwal dibuat`;
